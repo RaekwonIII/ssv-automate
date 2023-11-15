@@ -19,8 +19,9 @@ import DepositContract from "../../abi/DepositContract.json";
 import SSVContract from "../../abi/DepositContract.json";
 
 const provider = new ethers.JsonRpcProvider(
-  `https://goerli.infura.io/v3/${process.env.INFURA_ID}`
+  `${process.env.RPC_ENDPOINT}`
 );
+
 // const signer = provider.getSigner()
 const signer = new ethers.Wallet(process.env.PRIVATE_KEY || "", provider);
 
@@ -36,7 +37,7 @@ automate
     commaSeparatedList
   )
   .action(async (owner, options) => {
-    console.log(figlet.textSync("SSV Stats"));
+    console.log(figlet.textSync("SSV Automate"));
     // console.debug(`using GH token ${token}`);
     updateSpinnerText("Fetching developer activity stats for SSV");
 
@@ -46,6 +47,14 @@ automate
     let defaultDKGOperatorsInfo = [];
     for (const operatorId of [1, 2, 3]) {
       let defaultkgOperatorInfo = await getDKGOperatorInfo(operatorId);
+
+      if (!defaultkgOperatorInfo?.dkg_address) {
+
+        spinnerError();
+        stopSpinner();
+        console.error(`Operator ${operatorId} does not have a DKG endpoint set`);
+        return
+      }
       defaultDKGOperatorsInfo.push(defaultkgOperatorInfo);
     }
 
@@ -65,6 +74,13 @@ automate
         `Launching DKG ceremony to create new validator with operators 1, 2, 3, ${operatorId} \n`
       );
       let dkgOperatorInfo = await getDKGOperatorInfo(operatorId);
+      if (!dkgOperatorInfo?.dkg_address) {
+
+        spinnerError();
+        stopSpinner();
+        console.error(`Operator ${operatorId} does not have a DKG endpoint set`);
+        continue
+      }
 
       // run DKG ceremony with 3 default operators, and one of the provided operator IDs
       let latestValidator = await runDKG(owner, nonce, [...defaultDKGOperatorsInfo, dkgOperatorInfo]);
@@ -72,7 +88,7 @@ automate
       if (!latestValidator) {
         spinnerError()
         stopSpinner();
-        return
+        continue
       }
       spinnerInfo(`Depositing 32 ETH to activate new validatory key\n`);
 
@@ -150,12 +166,8 @@ async function getDKGOperatorInfo(
     const response = await axios(getDKGOperatorsRequestHeaders(operatorID));
 
     if (response.status !== 200) throw Error("Request did not return OK");
-    // if (!response.data.data.cluster) throw Error("Response is empty");
 
-    // const { id, lastUpdateBlockNumber, ...clusterSnapshot } = cluster;
-    // console.log(`Cluster snapshot:\n\n`);
-    // console.log(JSON.stringify(Object.values(clusterSnapshot)));
-    // console.log(`\nLast updated at block: ${cluster.lastUpdateBlockNumber}.`);
+    console.log(`Information for Operator ${operatorID} obtained: ${response.data.dkg_address}`)
     return {
       id: response.data.id,
       public_key: response.data.public_key,
@@ -175,7 +187,7 @@ const getDKGOperatorsRequestHeaders = (operator: number) => {
 
   const restOptions = {
     method: "GET",
-    url: `https://api.ssv.network/api/v4/prater/operators/${operator}`,
+    url: `${process.env.SSV_API}${operator}`,
     headers,
     // data: requestBody,
   };
@@ -192,8 +204,12 @@ async function sh(cmd: string): Promise<{ stdout: String; stderr: String }> {
   return new Promise(function (resolve, reject) {
     exec(cmd, (err, stdout, stderr) => {
       if (err) {
+        console.log(err);
         reject(err);
       } else {
+        for (let line of stderr.split("\n")) {
+          console.log(`ls: ${line}`);
+        }
         resolve({ stdout, stderr });
       }
     });
@@ -201,12 +217,6 @@ async function sh(cmd: string): Promise<{ stdout: String; stderr: String }> {
 }
 
 async function getLatestValidator() {
-  // let { stdout } = await sh("ls -snew");
-  // // find out content of stdout
-  // for (let line of stdout.split("\n")) {
-  //   console.log(`ls: ${line}`);
-  // }
-  // return stdout
   const orderReccentFiles = (dir: string) =>
     readdirSync(dir)
       .filter((f) => lstatSync(f).isFile())
@@ -227,6 +237,7 @@ async function runDKG(
 ) {
   let [OP1, OP2, OP3, OP4] = dkgOperatorsInfo;
   let cmd = `docker run -v $(pwd):/data -it "bloxstaking/ssv-dkg:latest" /app init --owner ${owner} --nonce ${nonce} --withdrawAddress ${owner} --operatorIDs ${OP1?.id}. ${OP2?.id}, ${OP3?.id}, ${OP4?.id} --operatorsInfo '[{"id":${OP1?.id},"public_key":"${OP1?.public_key}","ip":"${OP1?.dkg_address}"},{"id":${OP2?.id},"public_key":"${OP2?.public_key}","ip":"${OP2?.dkg_address}"},{"id":${OP3?.id},"public_key":"${OP3?.public_key}","ip":"${OP3?.dkg_address}"},{"id":${OP4?.id},"public_key":"${OP4?.public_key}","ip":"${OP4?.dkg_address}"}"}]' --network holesky --generateInitiatorKey --outputPath /data`;
+  console.log(`Running DKG ceremony with command: \n${cmd}\n`)
   let { stdout } = await sh(cmd);
   for (let line of stdout.split("\n")) {
     console.log(`ls: ${line}`);
@@ -262,8 +273,6 @@ async function depositValidatorKeys(deposit_filename: string) {
   console.log("Deposited 32 ETH, validator activated: ", res);
 }
 
-
-
 async function registerValidatorKeys(keyshare_filename: string, operatorID: number) {
   let rawData = fs.readFileSync(keyshare_filename, "utf8");
   let keyshare_data = JSON.parse(rawData);
@@ -283,7 +292,7 @@ async function registerValidatorKeys(keyshare_filename: string, operatorID: numb
     [1,2,3,operatorID],
     rawData,
     10,
-    [0,0,0,true,0]
+    [0,0,0,true,0]  // TODO use Graph to check cluster status
   );
   let res = await transaction.wait();
   console.log("Deposited 32 ETH, validator activated: ", res);
