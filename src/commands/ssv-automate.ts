@@ -16,9 +16,8 @@ import fs from "fs";
 import { readdirSync, lstatSync } from "fs";
 
 import DepositContract from "../../abi/DepositContract.json";
-import SSVContract from "../../abi/DepositContract.json";
+import SSVContract from "../../abi/SSVNetwork.json";
 import { ClusterScanner, NonceScanner } from "ssv-scanner";
-
 
 export const automate = new Command("automate");
 
@@ -31,9 +30,10 @@ automate
     commaSeparatedList
   )
   .action(async (owner, options) => {
-    console.log(figlet.textSync("SSV Automate"));
-    // console.debug(`using GH token ${token}`);
-    updateSpinnerText("Fetching developer activity stats for SSV");
+    console.info(figlet.textSync("SSV Automate"));
+    updateSpinnerText(
+      "Automating validator key creation, activation and registration\n"
+    );
 
     spinnerInfo(`Fetching default Operators Info\n`);
 
@@ -43,19 +43,24 @@ automate
       let defaultkgOperatorInfo = await getDKGOperatorInfo(operatorId);
 
       if (!defaultkgOperatorInfo?.dkg_address) {
-
         spinnerError();
         stopSpinner();
-        console.error(`Operator ${operatorId} does not have a DKG endpoint set`);
-        return
+        console.error(
+          `Operator ${operatorId} does not have a DKG endpoint set`
+        );
+        return;
       }
       defaultDKGOperatorsInfo.push(defaultkgOperatorInfo);
     }
 
+    spinnerSuccess();
     spinnerInfo(`Obtaining Nonce for user ${owner}\n`);
 
     // 1. get user's nonce
-    let nonce = await getOwnerNonce(owner);
+    // let nonce = await getOwnerNonce(owner);
+    let nonce = 0;
+
+    spinnerSuccess();
 
     spinnerInfo(
       `Looping through the provided operator IDs to create new validator keys \n`
@@ -69,37 +74,43 @@ automate
       );
       let dkgOperatorInfo = await getDKGOperatorInfo(operatorId);
       if (!dkgOperatorInfo?.dkg_address) {
-
         spinnerError();
         stopSpinner();
-        console.error(`Operator ${operatorId} does not have a DKG endpoint set`);
-        continue
+        console.error(
+          `Operator ${operatorId} does not have a DKG endpoint set`
+        );
+        continue;
       }
 
       // run DKG ceremony with 3 default operators, and one of the provided operator IDs
-      let latestValidator = await runDKG(owner, nonce, [...defaultDKGOperatorsInfo, dkgOperatorInfo]);
+      let latestValidator = await runDKG(owner, nonce, [
+        ...defaultDKGOperatorsInfo,
+        dkgOperatorInfo,
+      ]);
 
       if (!latestValidator) {
-        spinnerError()
+        spinnerError();
         stopSpinner();
-        continue
+        continue;
       }
+      spinnerSuccess();
       spinnerInfo(`Depositing 32 ETH to activate new validatory key\n`);
       // 3. deposit
-      // depositValidatorKeys(latestValidator.deposit);
+      depositValidatorKeys(latestValidator.deposit);
 
       spinnerInfo(`Registering Validator on SSV network\n`);
 
       // 4. register
       // registerValidatorKeys(latestValidator.keyshare, owner, operatorId)
 
+      spinnerSuccess();
       // increment nonce
-      nonce += 1;
+      // nonce += 1;
     }
 
     spinnerSuccess();
 
-    console.log(`...`);
+    console.info("Done.");
   });
 
 function commaSeparatedList(value: string, dummyPrevious: any) {
@@ -134,19 +145,18 @@ const getGraphQLOptions = (owner: string) => {
 };
 
 async function getOwnerNonce(owner: string): Promise<number> {
-  
   const params = {
     network: `${process.env.NETWORK}`,
     nodeUrl: `${process.env.RPC_ENDPOINT}`,
     ownerAddress: `${owner}`,
-    operatorIds: []
-  }
+    operatorIds: [],
+  };
   const nonceScanner = new NonceScanner(params);
   const nextNonce = await nonceScanner.run();
   return nextNonce;
 }
 
-async function getOwnerNonceFromSubgraph(owner:string): Promise<number> {
+async function getOwnerNonceFromSubgraph(owner: string): Promise<number> {
   let nonce = 0;
   try {
     const response = await axios(getGraphQLOptions(owner));
@@ -155,7 +165,7 @@ async function getOwnerNonceFromSubgraph(owner:string): Promise<number> {
 
     let ownerObj = response.data.data.account;
 
-    console.log(`Owner nonce:\n\n${ownerObj.nonce}`);
+    console.info(`Owner nonce:\n\n${ownerObj.nonce}`);
     nonce = ownerObj.nonce;
   } catch (err) {
     spinnerError();
@@ -176,7 +186,9 @@ async function getDKGOperatorInfo(
 
     if (response.status !== 200) throw Error("Request did not return OK");
 
-    console.log(`Information for Operator ${operatorID} obtained: ${response.data.dkg_address}`)
+    console.info(
+      `Information for Operator ${operatorID} obtained: ${response.data.dkg_address}`
+    );
     return {
       id: response.data.id,
       public_key: response.data.public_key,
@@ -185,7 +197,7 @@ async function getDKGOperatorInfo(
   } catch (err) {
     spinnerError();
     stopSpinner();
-    console.error("ERROR DURING AXIOS REQUEST",);
+    console.error("ERROR DURING AXIOS REQUEST");
   }
 }
 
@@ -213,9 +225,9 @@ async function sh(cmd: string): Promise<{ stdout: String; stderr: String }> {
   return new Promise(function (resolve, reject) {
     exec(cmd, (err, stdout, stderr) => {
       if (err) {
-        console.log(err);
+        console.error(err);
         for (let line of stderr.split("\n")) {
-          console.log(`ls: ${line}`);
+          console.error(`ls: ${line}`);
         }
         reject(err);
       } else {
@@ -226,14 +238,29 @@ async function sh(cmd: string): Promise<{ stdout: String; stderr: String }> {
 }
 
 async function getLatestValidator() {
-  const orderReccentFiles = (dir: string) =>
+  const orderRecentFilesByName = (dir: string, prefix: string) =>
     readdirSync(dir)
-      .filter((f) => lstatSync(f).isFile())
-      .map((file) => ({ file, mtime: lstatSync(file).mtime }))
-      .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
+      .filter((f) => lstatSync(`${dir}/${f}`).isFile())
+      .filter((f) => f.startsWith(prefix))
+      .map((f) => ({
+        file: `${dir}/${f}`,
+        mtime: lstatSync(`${dir}/${f}`).mtime,
+      }))
+      .sort((a, b) => b.mtime.getTime() - a.mtime.getTime())
+      .map((x) => x.file);
 
-  const files = orderReccentFiles(".");
-  return files.length ? { keyshare: files[0].file, deposit: files[1].file }: undefined;
+  let dir = `${__dirname}/../../${process.env.OUTPUT_FOLDER}`;
+
+  const deposit = orderRecentFilesByName(dir, "deposit");
+  console.info(`Deposit file: ${deposit?.[0]}`);
+
+  const keyshares = orderRecentFilesByName(dir, "keyshare");
+  console.info(`Keyshares file: ${keyshares?.[0]}`);
+
+  if (deposit.length && keyshares.length)
+    return { keyshare: keyshares[0], deposit: deposit[0] };
+
+  return undefined;
 }
 
 async function runDKG(
@@ -245,11 +272,11 @@ async function runDKG(
   )[]
 ) {
   let [OP1, OP2, OP3, OP4] = dkgOperatorsInfo;
-  let cmd = `docker run -v $(pwd)/output_data:/data "ssv-dkg:latest" /app init --owner ${owner} --nonce ${nonce} --withdrawAddress ${owner} --operatorIDs ${OP1?.id},${OP2?.id},${OP3?.id},${OP4?.id} --operatorsInfo '[{"id":${OP1?.id},"public_key":"${OP1?.public_key}","ip":"${OP1?.dkg_address}"},{"id":${OP2?.id},"public_key":"${OP2?.public_key}","ip":"${OP2?.dkg_address}"},{"id":${OP3?.id},"public_key":"${OP3?.public_key}","ip":"${OP3?.dkg_address}"},{"id":${OP4?.id},"public_key":"${OP4?.public_key}","ip":"${OP4?.dkg_address}"}]' --network holesky --generateInitiatorKey --outputPath /data`;
-  console.log(`Running DKG ceremony with command: \n${cmd}\n`)
+  let cmd = `docker run -v $(pwd)/${process.env.OUTPUT_FOLDER}:/data "ssv-dkg:latest" /app init --owner ${owner} --nonce ${nonce} --withdrawAddress ${owner} --operatorIDs ${OP1?.id},${OP2?.id},${OP3?.id},${OP4?.id} --operatorsInfo '[{"id":${OP1?.id},"public_key":"${OP1?.public_key}","ip":"${OP1?.dkg_address}"},{"id":${OP2?.id},"public_key":"${OP2?.public_key}","ip":"${OP2?.dkg_address}"},{"id":${OP3?.id},"public_key":"${OP3?.public_key}","ip":"${OP3?.dkg_address}"},{"id":${OP4?.id},"public_key":"${OP4?.public_key}","ip":"${OP4?.dkg_address}"}]' --network holesky --generateInitiatorKey --outputPath /data`;
+  console.debug(`Running DKG ceremony with command: \n${cmd}\n`);
   let { stdout } = await sh(cmd);
   for (let line of stdout.split("\n")) {
-    console.log(`${line}`);
+    console.info(`${line}`);
   }
 
   return await getLatestValidator();
@@ -257,17 +284,18 @@ async function runDKG(
 
 async function depositValidatorKeys(deposit_filename: string) {
   let rawData = fs.readFileSync(deposit_filename, "utf8");
-  let deposit_data = JSON.parse(rawData);
+  console.debug(`Raw data: \n${rawData}`);
+  let deposit_data = JSON.parse(rawData)[0];
+  console.debug(`Parsed data: \n${deposit_data}`);
 
-  const provider = new ethers.JsonRpcProvider(
-    `${process.env.RPC_ENDPOINT}`
-  );
-  
+  const provider = new ethers.JsonRpcProvider(`${process.env.RPC_ENDPOINT}`);
+
   const signer = new ethers.Wallet(process.env.PRIVATE_KEY || "", provider);
 
   /* next, create the item */
   let contract = new ethers.Contract(
-    process.env.DEPOSIT_CONTRACT || "0x4242424242424242424242424242424242424242",
+    process.env.DEPOSIT_CONTRACT ||
+      "0x4242424242424242424242424242424242424242",
     DepositContract,
     signer
   );
@@ -277,40 +305,53 @@ async function depositValidatorKeys(deposit_filename: string) {
   let withdrawal_credentials = deposit_data.withdrawal_credentials;
   let signature = deposit_data.signature;
   let deposit_data_root = deposit_data.deposit_data_root;
+  console.info(
+    ` Activating validator ${pubkey} \n Setting withdrawal credentials to ${withdrawal_credentials} \n On network: ${deposit_data.network_name}`
+  );
+
+  // https://github.com/ethers-io/ethers.js/issues/1144
   let transaction = await contract.deposit(
-    deposit,
-    pubkey,
-    withdrawal_credentials,
-    signature,
-    deposit_data_root
+    {
+      pubkey,
+      withdrawal_credentials,
+      signature,
+      deposit_data_root,
+    },
+    {
+      value: deposit,
+    }
   );
   let res = await transaction.wait();
-  console.log("Deposited 32 ETH, validator activated: ", res);
+  console.info("Deposited 32 ETH, validator activated: ", res);
 }
 
-async function getClusterSnapshot(owner:string, operatorIds: number[]): Promise<any[]> {
-
+async function getClusterSnapshot(
+  owner: string,
+  operatorIds: number[]
+): Promise<any[]> {
   const params = {
     network: `${process.env.NETWORK}`,
     nodeUrl: `${process.env.RPC_ENDPOINT}`,
     ownerAddress: `${owner}`,
-    operatorIds: operatorIds
-  }
+    operatorIds: operatorIds,
+  };
 
   const clusterScanner = new ClusterScanner(params);
   const result = await clusterScanner.run(params.operatorIds);
-  console.info(`Obtained cluster snapshot: ${result.cluster}`)
-  return Object.values(result.cluster)
+  console.info(`Obtained cluster snapshot: ${result.cluster}`);
+  return Object.values(result.cluster);
 }
 
-async function registerValidatorKeys(keyshare_filename: string, owner:string, operatorID: number) {
+async function registerValidatorKeys(
+  keyshare_filename: string,
+  owner: string,
+  operatorID: number
+) {
   let rawData = fs.readFileSync(keyshare_filename, "utf8");
   let keyshare_data = JSON.parse(rawData);
 
-  const provider = new ethers.JsonRpcProvider(
-    `${process.env.RPC_ENDPOINT}`
-  );
-  
+  const provider = new ethers.JsonRpcProvider(`${process.env.RPC_ENDPOINT}`);
+
   const signer = new ethers.Wallet(process.env.PRIVATE_KEY || "", provider);
 
   /* next, create the item */
@@ -319,22 +360,25 @@ async function registerValidatorKeys(keyshare_filename: string, owner:string, op
     SSVContract,
     signer
   );
-  let deposit = keyshare_data.amount;
-  let pubkey = keyshare_data.pubkey;
-  let withdrawal_credentials = keyshare_data.withdrawal_credentials;
-  let signature = keyshare_data.signature;
-  let deposit_data_root = keyshare_data.deposit_data_root;
 
-  const clusterSnapshot = await getClusterSnapshot(owner, [1,2,3,operatorID])
-  console.info(`Cluster Snapshot: ${clusterSnapshot}`)
+  let pubkey = keyshare_data.payload.pubkey;
+  let operatorIds = keyshare_data.payload.operatorIds;
+  let sharesData = keyshare_data.payload.sharesData;
+  const clusterSnapshot = [0, 0, 0, true, 0]; // await getClusterSnapshot(owner, operatorIds)
+  console.info(`Cluster Snapshot: ${clusterSnapshot}`);
 
   let transaction = await contract.registerValidator(
-    pubkey,
-    [1,2,3,operatorID],
-    rawData,
-    10,
-    clusterSnapshot  // TODO use Graph to check cluster status
+    {
+      pubkey,
+      operatorIds,
+      sharesData,
+      amount: 10,
+      clusterSnapshot,
+    },
+    {
+      value: ethers.parseEther("10"),
+    }
   );
   let res = await transaction.wait();
-  console.log("Deposited 32 ETH, validator activated: ", res);
+  console.info(`Registered validator ${pubkey}: `, res);
 }
