@@ -17,13 +17,7 @@ import { readdirSync, lstatSync } from "fs";
 
 import DepositContract from "../../abi/DepositContract.json";
 import SSVContract from "../../abi/DepositContract.json";
-
-const provider = new ethers.JsonRpcProvider(
-  `${process.env.RPC_ENDPOINT}`
-);
-
-// const signer = provider.getSigner()
-const signer = new ethers.Wallet(process.env.PRIVATE_KEY || "", provider);
+import { ClusterScanner, NonceScanner } from "ssv-scanner";
 
 
 export const automate = new Command("automate");
@@ -61,7 +55,7 @@ automate
     spinnerInfo(`Obtaining Nonce for user ${owner}\n`);
 
     // 1. get user's nonce
-    const nonce = await getOwnerNonce(owner);
+    let nonce = await getOwnerNonce(owner);
 
     spinnerInfo(
       `Looping through the provided operator IDs to create new validator keys \n`
@@ -91,14 +85,16 @@ automate
         continue
       }
       spinnerInfo(`Depositing 32 ETH to activate new validatory key\n`);
-
       // 3. deposit
-      depositValidatorKeys(latestValidator.deposit);
+      // depositValidatorKeys(latestValidator.deposit);
 
       spinnerInfo(`Registering Validator on SSV network\n`);
 
       // 4. register
-      registerValidatorKeys(latestValidator.keyshare, operatorId)
+      // registerValidatorKeys(latestValidator.keyshare, owner, operatorId)
+
+      // increment nonce
+      nonce += 1;
     }
 
     spinnerSuccess();
@@ -129,7 +125,7 @@ const getGraphQLOptions = (owner: string) => {
     method: "POST",
     url:
       process.env.SUBGRAPH_API ||
-      "https://api.studio.thegraph.com/query/53804/ssv-subgraph/version/latest",
+      "https://api.thegraph.com/subgraphs/name/raekwoniii/ssv-subgraph",
     headers,
     data: requestBody,
   };
@@ -138,6 +134,19 @@ const getGraphQLOptions = (owner: string) => {
 };
 
 async function getOwnerNonce(owner: string): Promise<number> {
+  
+  const params = {
+    network: `${process.env.NETWORK}`,
+    nodeUrl: `${process.env.RPC_ENDPOINT}`,
+    ownerAddress: `${owner}`,
+    operatorIds: []
+  }
+  const nonceScanner = new NonceScanner(params);
+  const nextNonce = await nonceScanner.run();
+  return nextNonce;
+}
+
+async function getOwnerNonceFromSubgraph(owner:string): Promise<number> {
   let nonce = 0;
   try {
     const response = await axios(getGraphQLOptions(owner));
@@ -176,7 +185,7 @@ async function getDKGOperatorInfo(
   } catch (err) {
     spinnerError();
     stopSpinner();
-    console.error("ERROR DURING AXIOS REQUEST", err);
+    console.error("ERROR DURING AXIOS REQUEST",);
   }
 }
 
@@ -205,11 +214,11 @@ async function sh(cmd: string): Promise<{ stdout: String; stderr: String }> {
     exec(cmd, (err, stdout, stderr) => {
       if (err) {
         console.log(err);
-        reject(err);
-      } else {
         for (let line of stderr.split("\n")) {
           console.log(`ls: ${line}`);
         }
+        reject(err);
+      } else {
         resolve({ stdout, stderr });
       }
     });
@@ -236,11 +245,11 @@ async function runDKG(
   )[]
 ) {
   let [OP1, OP2, OP3, OP4] = dkgOperatorsInfo;
-  let cmd = `docker run -v $(pwd):/data -it "bloxstaking/ssv-dkg:latest" /app init --owner ${owner} --nonce ${nonce} --withdrawAddress ${owner} --operatorIDs ${OP1?.id}. ${OP2?.id}, ${OP3?.id}, ${OP4?.id} --operatorsInfo '[{"id":${OP1?.id},"public_key":"${OP1?.public_key}","ip":"${OP1?.dkg_address}"},{"id":${OP2?.id},"public_key":"${OP2?.public_key}","ip":"${OP2?.dkg_address}"},{"id":${OP3?.id},"public_key":"${OP3?.public_key}","ip":"${OP3?.dkg_address}"},{"id":${OP4?.id},"public_key":"${OP4?.public_key}","ip":"${OP4?.dkg_address}"}"}]' --network holesky --generateInitiatorKey --outputPath /data`;
+  let cmd = `docker run -v $(pwd)/output_data:/data "ssv-dkg:latest" /app init --owner ${owner} --nonce ${nonce} --withdrawAddress ${owner} --operatorIDs ${OP1?.id},${OP2?.id},${OP3?.id},${OP4?.id} --operatorsInfo '[{"id":${OP1?.id},"public_key":"${OP1?.public_key}","ip":"${OP1?.dkg_address}"},{"id":${OP2?.id},"public_key":"${OP2?.public_key}","ip":"${OP2?.dkg_address}"},{"id":${OP3?.id},"public_key":"${OP3?.public_key}","ip":"${OP3?.dkg_address}"},{"id":${OP4?.id},"public_key":"${OP4?.public_key}","ip":"${OP4?.dkg_address}"}]' --network holesky --generateInitiatorKey --outputPath /data`;
   console.log(`Running DKG ceremony with command: \n${cmd}\n`)
   let { stdout } = await sh(cmd);
   for (let line of stdout.split("\n")) {
-    console.log(`ls: ${line}`);
+    console.log(`${line}`);
   }
 
   return await getLatestValidator();
@@ -249,6 +258,12 @@ async function runDKG(
 async function depositValidatorKeys(deposit_filename: string) {
   let rawData = fs.readFileSync(deposit_filename, "utf8");
   let deposit_data = JSON.parse(rawData);
+
+  const provider = new ethers.JsonRpcProvider(
+    `${process.env.RPC_ENDPOINT}`
+  );
+  
+  const signer = new ethers.Wallet(process.env.PRIVATE_KEY || "", provider);
 
   /* next, create the item */
   let contract = new ethers.Contract(
@@ -273,9 +288,31 @@ async function depositValidatorKeys(deposit_filename: string) {
   console.log("Deposited 32 ETH, validator activated: ", res);
 }
 
-async function registerValidatorKeys(keyshare_filename: string, operatorID: number) {
+async function getClusterSnapshot(owner:string, operatorIds: number[]): Promise<any[]> {
+
+  const params = {
+    network: `${process.env.NETWORK}`,
+    nodeUrl: `${process.env.RPC_ENDPOINT}`,
+    ownerAddress: `${owner}`,
+    operatorIds: operatorIds
+  }
+
+  const clusterScanner = new ClusterScanner(params);
+  const result = await clusterScanner.run(params.operatorIds);
+  console.info(`Obtained cluster snapshot: ${result.cluster}`)
+  return Object.values(result.cluster)
+}
+
+async function registerValidatorKeys(keyshare_filename: string, owner:string, operatorID: number) {
   let rawData = fs.readFileSync(keyshare_filename, "utf8");
   let keyshare_data = JSON.parse(rawData);
+
+  const provider = new ethers.JsonRpcProvider(
+    `${process.env.RPC_ENDPOINT}`
+  );
+  
+  const signer = new ethers.Wallet(process.env.PRIVATE_KEY || "", provider);
+
   /* next, create the item */
   let contract = new ethers.Contract(
     process.env.SSV_CONTRACT || "",
@@ -287,12 +324,16 @@ async function registerValidatorKeys(keyshare_filename: string, operatorID: numb
   let withdrawal_credentials = keyshare_data.withdrawal_credentials;
   let signature = keyshare_data.signature;
   let deposit_data_root = keyshare_data.deposit_data_root;
+
+  const clusterSnapshot = await getClusterSnapshot(owner, [1,2,3,operatorID])
+  console.info(`Cluster Snapshot: ${clusterSnapshot}`)
+
   let transaction = await contract.registerValidator(
     pubkey,
     [1,2,3,operatorID],
     rawData,
     10,
-    [0,0,0,true,0]  // TODO use Graph to check cluster status
+    clusterSnapshot  // TODO use Graph to check cluster status
   );
   let res = await transaction.wait();
   console.log("Deposited 32 ETH, validator activated: ", res);

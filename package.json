@@ -17,7 +17,8 @@
     "ethers": "^6.8.1",
     "exec": "^0.2.1",
     "figlet": "^1.7.0",
-    "ora": "^7.0.1"
+    "ora": "^7.0.1",
+    "ssv-scanner": "git@github.com:bloxapp/ssv-scanner.git"
   },
   "description": "To install dependencies:",
   "version": "1.0.0",
