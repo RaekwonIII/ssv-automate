@@ -17,7 +17,7 @@ import { readdirSync, lstatSync } from "fs";
 
 import DepositContract from "../../abi/DepositContract.json";
 import SSVContract from "../../abi/SSVNetwork.json";
-import { ClusterScanner, NonceScanner } from "ssv-scanner";
+// import { ClusterScanner, NonceScanner } from "ssv-scanner";
 
 export const automate = new Command("automate");
 
@@ -144,17 +144,18 @@ const getGraphQLOptions = (owner: string) => {
   return graphQLOptions;
 };
 
-async function getOwnerNonce(owner: string): Promise<number> {
-  const params = {
-    network: `${process.env.NETWORK}`,
-    nodeUrl: `${process.env.RPC_ENDPOINT}`,
-    ownerAddress: `${owner}`,
-    operatorIds: [],
-  };
-  const nonceScanner = new NonceScanner(params);
-  const nextNonce = await nonceScanner.run();
-  return nextNonce;
-}
+// https://github.com/oven-sh/bun/issues/3546
+// async function getOwnerNonce(owner: string): Promise<number> {
+//   const params = {
+//     network: `${process.env.NETWORK}`,
+//     nodeUrl: `${process.env.RPC_ENDPOINT}`,
+//     ownerAddress: `${owner}`,
+//     operatorIds: [],
+//   };
+//   const nonceScanner = new NonceScanner(params);
+//   const nextNonce = await nonceScanner.run();
+//   return nextNonce;
+// }
 
 async function getOwnerNonceFromSubgraph(owner: string): Promise<number> {
   let nonce = 0;
@@ -325,22 +326,23 @@ async function depositValidatorKeys(deposit_filename: string) {
   console.info("Deposited 32 ETH, validator activated: ", res);
 }
 
-async function getClusterSnapshot(
-  owner: string,
-  operatorIds: number[]
-): Promise<any[]> {
-  const params = {
-    network: `${process.env.NETWORK}`,
-    nodeUrl: `${process.env.RPC_ENDPOINT}`,
-    ownerAddress: `${owner}`,
-    operatorIds: operatorIds,
-  };
+// https://github.com/oven-sh/bun/issues/3546
+// async function getClusterSnapshot(
+//   owner: string,
+//   operatorIds: number[]
+// ): Promise<any[]> {
+//   const params = {
+//     network: `${process.env.NETWORK}`,
+//     nodeUrl: `${process.env.RPC_ENDPOINT}`,
+//     ownerAddress: `${owner}`,
+//     operatorIds: operatorIds,
+//   };
 
-  const clusterScanner = new ClusterScanner(params);
-  const result = await clusterScanner.run(params.operatorIds);
-  console.info(`Obtained cluster snapshot: ${result.cluster}`);
-  return Object.values(result.cluster);
-}
+//   const clusterScanner = new ClusterScanner(params);
+//   const result = await clusterScanner.run(params.operatorIds);
+//   console.info(`Obtained cluster snapshot: ${result.cluster}`);
+//   return Object.values(result.cluster);
+// }
 
 async function registerValidatorKeys(
   keyshare_filename: string,
