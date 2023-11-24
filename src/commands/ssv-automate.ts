@@ -12,6 +12,7 @@ import { exec } from "child_process";
 import { ethers } from "ethers";
 
 import fs from "fs";
+import { Web3 } from "web3";
 
 import { readdirSync, lstatSync } from "fs";
 
@@ -34,8 +35,6 @@ automate
     updateSpinnerText(
       "Automating validator key creation, activation and registration\n"
     );
-
-    spinnerInfo(`Fetching default Operators Info\n`);
 
     // 0. load default operators (1, 2, 3) info
     let defaultDKGOperatorsInfo = [];
@@ -96,16 +95,16 @@ automate
       spinnerSuccess();
       spinnerInfo(`Depositing 32 ETH to activate new validatory key\n`);
       // 3. deposit
-      depositValidatorKeys(latestValidator.deposit);
+      await depositValidatorKeys(latestValidator.deposit);
 
       spinnerInfo(`Registering Validator on SSV network\n`);
 
       // 4. register
-      // registerValidatorKeys(latestValidator.keyshare, owner, operatorId)
+      await registerValidatorKeys(latestValidator.keyshare, owner, operatorId)
 
       spinnerSuccess();
       // increment nonce
-      // nonce += 1;
+      nonce += 1;
     }
 
     spinnerSuccess();
@@ -285,11 +284,14 @@ async function runDKG(
 
 async function depositValidatorKeys(deposit_filename: string) {
   let rawData = fs.readFileSync(deposit_filename, "utf8");
-  console.debug(`Raw data: \n${rawData}`);
+  // console.debug(`Raw data: \n${rawData}`);
   let deposit_data = JSON.parse(rawData)[0];
-  console.debug(`Parsed data: \n${deposit_data}`);
+  // console.debug("Parsed data:")
+  // console.debug(deposit_data);
 
-  const provider = new ethers.JsonRpcProvider(`${process.env.RPC_ENDPOINT}`);
+  const provider = new ethers.providers.JsonRpcProvider(
+    `${process.env.RPC_ENDPOINT}`
+  );
 
   const signer = new ethers.Wallet(process.env.PRIVATE_KEY || "", provider);
 
@@ -301,25 +303,31 @@ async function depositValidatorKeys(deposit_filename: string) {
     signer
   );
 
-  let deposit = deposit_data.amount;
-  let pubkey = deposit_data.pubkey;
-  let withdrawal_credentials = deposit_data.withdrawal_credentials;
-  let signature = deposit_data.signature;
-  let deposit_data_root = deposit_data.deposit_data_root;
-  console.info(
-    ` Activating validator ${pubkey} \n Setting withdrawal credentials to ${withdrawal_credentials} \n On network: ${deposit_data.network_name}`
-  );
+  // console.log("FUNCTIONS", contract.interface.forEachFunction((f)=>console.log(f)))
 
-  // https://github.com/ethers-io/ethers.js/issues/1144
+  // let deposit_func = contract.getFunction("deposit")
+
+  let deposit = deposit_data.amount;
+  console.log(deposit)
+  let pubkey = Web3.utils.hexToBytes(deposit_data.pubkey); // `0x${deposit_data.pubkey}`;
+  let withdrawal_credentials = Web3.utils.hexToBytes(deposit_data.withdrawal_credentials); //`0x${deposit_data.withdrawal_credentials}`;
+  let signature = Web3.utils.hexToBytes(deposit_data.signature); //`0x${deposit_data.signature}`;
+  let deposit_data_root = Web3.utils.hexToBytes(deposit_data.deposit_data_root); //`0x${deposit_data.deposit_data_root}`
+
+  console.info(
+    `Activating validator ${pubkey}\nOn network: ${deposit_data.network_name}`
+);
+
+  // // https://github.com/ethers-io/ethers.js/issues/1144
   let transaction = await contract.deposit(
-    {
-      pubkey,
-      withdrawal_credentials,
-      signature,
-      deposit_data_root,
-    },
+    pubkey,
+    withdrawal_credentials,
+    signature,
+    deposit_data_root,
     {
       value: deposit,
+      // gasPrice: 130000000000,
+      gasLimit: 3000000
     }
   );
   let res = await transaction.wait();
@@ -352,7 +360,9 @@ async function registerValidatorKeys(
   let rawData = fs.readFileSync(keyshare_filename, "utf8");
   let keyshare_data = JSON.parse(rawData);
 
-  const provider = new ethers.JsonRpcProvider(`${process.env.RPC_ENDPOINT}`);
+  const provider = new ethers.providers.JsonRpcProvider(
+    `${process.env.RPC_ENDPOINT}`
+  );
 
   const signer = new ethers.Wallet(process.env.PRIVATE_KEY || "", provider);
 
@@ -378,7 +388,7 @@ async function registerValidatorKeys(
       clusterSnapshot,
     },
     {
-      value: ethers.parseEther("10"),
+      value: ethers.utils.parseEther("10"),
     }
   );
   let res = await transaction.wait();
