@@ -36,7 +36,7 @@ automate
       "Automating validator key creation, activation and registration\n"
     );
 
-    spinnerInfo(`Fetching default Operators Info\n`);
+    updateSpinnerText(`Fetching default Operators Info\n`);
 
     // 0. load default operators (1, 2, 3) info
     let defaultDKGOperatorsInfo = [];
@@ -55,21 +55,21 @@ automate
     }
 
     spinnerSuccess();
-    spinnerInfo(`Obtaining Nonce for user ${owner}\n`);
+    updateSpinnerText(`Obtaining Nonce for user ${owner}\n`);
 
     // 1. get user's nonce
     let nonce = 1; // await getOwnerNonce(owner);
 
     spinnerSuccess();
 
-    spinnerInfo(
+    updateSpinnerText(
       `Looping through the provided operator IDs to create new validator keys \n`
     );
 
     for (const operatorId of options.operators) {
       // 2. invoke dkg-tool
 
-      spinnerInfo(
+      updateSpinnerText(
         `Launching DKG ceremony to create new validator with operators 1, 2, 3, ${operatorId} \n`
       );
       let dkgOperatorInfo = await getDKGOperatorInfo(operatorId);
@@ -94,11 +94,11 @@ automate
         continue;
       }
       spinnerSuccess();
-      spinnerInfo(`Depositing 32 ETH to activate new validatory key\n`);
+      updateSpinnerText(`Depositing 32 ETH to activate new validatory key\n`);
       // 3. deposit
       await depositValidatorKeys(latestValidator.deposit);
 
-      spinnerInfo(`Registering Validator on SSV network\n`);
+      updateSpinnerText(`Registering Validator on SSV network\n`);
 
       // 4. register
       await registerValidatorKeys(latestValidator.keyshare, owner, operatorId);
@@ -108,9 +108,9 @@ automate
       nonce += 1;
     }
 
+    updateSpinnerText("Done");
     spinnerSuccess();
 
-    console.info("Done.");
   });
 
 function commaSeparatedList(value: string, dummyPrevious: any) {
@@ -166,7 +166,7 @@ async function getOwnerNonceFromSubgraph(owner: string): Promise<number> {
 
     let ownerObj = response.data.data.account;
 
-    console.info(`Owner nonce:\n\n${ownerObj.nonce}`);
+    console.debug(`Owner nonce:\n\n${ownerObj.nonce}`);
     nonce = ownerObj.nonce;
   } catch (err) {
     spinnerError();
@@ -187,7 +187,7 @@ async function getDKGOperatorInfo(
 
     if (response.status !== 200) throw Error("Request did not return OK");
 
-    console.info(
+    console.debug(
       `Information for Operator ${operatorID} obtained: ${response.data.dkg_address}`
     );
     return {
@@ -252,10 +252,10 @@ async function getLatestValidator() {
   let dir = `${__dirname}/../../${process.env.OUTPUT_FOLDER}`;
 
   const deposit = orderRecentFilesByName(dir, "deposit");
-  console.info(`Deposit file: ${deposit?.[0]}`);
+  console.debug(`Deposit file: ${deposit?.[0].substring(dir.length, deposit.length)}`);
 
   const keyshares = orderRecentFilesByName(dir, "keyshare");
-  console.info(`Keyshares file: ${keyshares?.[0]}`);
+  console.debug(`Keyshares file: ${keyshares?.[0].substring(dir.length, keyshares.length)}`);
 
   if (deposit.length && keyshares.length)
     return { keyshare: keyshares[0], deposit: deposit[0] };
@@ -310,7 +310,7 @@ async function depositValidatorKeys(deposit_filename: string) {
   let signature = Web3.utils.hexToBytes(deposit_data.signature);
   let deposit_data_root = Web3.utils.hexToBytes(deposit_data.deposit_data_root);
 
-  console.info(
+  console.debug(
     `Activating validator ${Web3.utils.bytesToHex(pubkey)}\nOn network: ${
       deposit_data.network_name
     }`
@@ -334,7 +334,7 @@ async function depositValidatorKeys(deposit_filename: string) {
     }
   );
   let res = await transaction.wait();
-  console.info("Deposited 32 ETH, validator activated: ", res);
+  console.debug("Deposited 32 ETH, validator activated: ", res.transactionHash);
 }
 
 // https://github.com/oven-sh/bun/issues/3546
@@ -360,7 +360,6 @@ async function registerValidatorKeys(
   owner: string,
   operatorID: number
 ) {
-  console.log(keyshare_filename);
   let rawData = fs.readFileSync(keyshare_filename, "utf8");
   let keyshare_data = JSON.parse(rawData);
 
@@ -378,10 +377,8 @@ async function registerValidatorKeys(
   );
 
   let pubkey = keyshare_data.payload.publicKey;
-  console.log(pubkey);
   let operatorIds = keyshare_data.payload.operatorIds;
   let sharesData = keyshare_data.payload.sharesData;
-  console.log(sharesData);
   let amount = ethers.utils.parseEther("10");
   const clusterSnapshot =
     // await getClusterSnapshot(owner, operatorIds)
@@ -401,6 +398,8 @@ async function registerValidatorKeys(
     clusterSnapshot
   );
 
+  // This needs approval for spending SSV token
+  // https://holesky.etherscan.io/address/0xad45A78180961079BFaeEe349704F411dfF947C6#writeContract
   let transaction = await contract.registerValidator(
     pubkey,
     operatorIds,
@@ -412,5 +411,5 @@ async function registerValidatorKeys(
     }
   );
   let res = await transaction.wait();
-  console.info(`Registered validator ${pubkey}: `, res);
+  console.debug(`Registered validator ${pubkey}: `, res.transactionHash);
 }
