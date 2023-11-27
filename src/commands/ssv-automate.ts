@@ -36,6 +36,8 @@ automate
       "Automating validator key creation, activation and registration\n"
     );
 
+    spinnerInfo(`Fetching default Operators Info\n`);
+
     // 0. load default operators (1, 2, 3) info
     let defaultDKGOperatorsInfo = [];
     for (const operatorId of [1, 2, 3]) {
@@ -56,8 +58,7 @@ automate
     spinnerInfo(`Obtaining Nonce for user ${owner}\n`);
 
     // 1. get user's nonce
-    // let nonce = await getOwnerNonce(owner);
-    let nonce = 0;
+    let nonce = 1; // await getOwnerNonce(owner);
 
     spinnerSuccess();
 
@@ -100,7 +101,7 @@ automate
       spinnerInfo(`Registering Validator on SSV network\n`);
 
       // 4. register
-      await registerValidatorKeys(latestValidator.keyshare, owner, operatorId)
+      await registerValidatorKeys(latestValidator.keyshare, owner, operatorId);
 
       spinnerSuccess();
       // increment nonce
@@ -210,7 +211,6 @@ const getDKGOperatorsRequestHeaders = (operator: number) => {
     method: "GET",
     url: `${process.env.SSV_API}${operator}`,
     headers,
-    // data: requestBody,
   };
 
   return restOptions;
@@ -284,7 +284,6 @@ async function runDKG(
 
 async function depositValidatorKeys(deposit_filename: string) {
   let rawData = fs.readFileSync(deposit_filename, "utf8");
-  // console.debug(`Raw data: \n${rawData}`);
   let deposit_data = JSON.parse(rawData)[0];
   // console.debug("Parsed data:")
   // console.debug(deposit_data);
@@ -303,22 +302,27 @@ async function depositValidatorKeys(deposit_filename: string) {
     signer
   );
 
-  // console.log("FUNCTIONS", contract.interface.forEachFunction((f)=>console.log(f)))
-
-  // let deposit_func = contract.getFunction("deposit")
-
-  let deposit = deposit_data.amount;
-  console.log(deposit)
-  let pubkey = Web3.utils.hexToBytes(deposit_data.pubkey); // `0x${deposit_data.pubkey}`;
-  let withdrawal_credentials = Web3.utils.hexToBytes(deposit_data.withdrawal_credentials); //`0x${deposit_data.withdrawal_credentials}`;
-  let signature = Web3.utils.hexToBytes(deposit_data.signature); //`0x${deposit_data.signature}`;
-  let deposit_data_root = Web3.utils.hexToBytes(deposit_data.deposit_data_root); //`0x${deposit_data.deposit_data_root}`
+  let deposit = ethers.utils.parseEther("32"); // deposit_data.amount;
+  let pubkey = Web3.utils.hexToBytes(deposit_data.pubkey);
+  let withdrawal_credentials = Web3.utils.hexToBytes(
+    deposit_data.withdrawal_credentials
+  );
+  let signature = Web3.utils.hexToBytes(deposit_data.signature);
+  let deposit_data_root = Web3.utils.hexToBytes(deposit_data.deposit_data_root);
 
   console.info(
-    `Activating validator ${pubkey}\nOn network: ${deposit_data.network_name}`
-);
+    `Activating validator ${Web3.utils.bytesToHex(pubkey)}\nOn network: ${
+      deposit_data.network_name
+    }`
+  );
 
-  // // https://github.com/ethers-io/ethers.js/issues/1144
+  const gasLimit = contract.estimateGas.deposit(
+    pubkey,
+    withdrawal_credentials,
+    signature,
+    deposit_data_root
+  );
+
   let transaction = await contract.deposit(
     pubkey,
     withdrawal_credentials,
@@ -326,8 +330,7 @@ async function depositValidatorKeys(deposit_filename: string) {
     deposit_data_root,
     {
       value: deposit,
-      // gasPrice: 130000000000,
-      gasLimit: 3000000
+      gasLimit: gasLimit,
     }
   );
   let res = await transaction.wait();
@@ -357,6 +360,7 @@ async function registerValidatorKeys(
   owner: string,
   operatorID: number
 ) {
+  console.log(keyshare_filename);
   let rawData = fs.readFileSync(keyshare_filename, "utf8");
   let keyshare_data = JSON.parse(rawData);
 
@@ -373,22 +377,38 @@ async function registerValidatorKeys(
     signer
   );
 
-  let pubkey = keyshare_data.payload.pubkey;
+  let pubkey = keyshare_data.payload.publicKey;
+  console.log(pubkey);
   let operatorIds = keyshare_data.payload.operatorIds;
   let sharesData = keyshare_data.payload.sharesData;
-  const clusterSnapshot = [0, 0, 0, true, 0]; // await getClusterSnapshot(owner, operatorIds)
-  console.info(`Cluster Snapshot: ${clusterSnapshot}`);
+  console.log(sharesData);
+  let amount = ethers.utils.parseEther("10");
+  const clusterSnapshot =
+    // await getClusterSnapshot(owner, operatorIds)
+    {
+      validatorCount: 0,
+      networkFeeIndex: 0,
+      index: 0,
+      active: true,
+      balance: 0,
+    };
+
+  const gasLimit = contract.estimateGas.registerValidator(
+    pubkey,
+    operatorIds,
+    sharesData,
+    amount,
+    clusterSnapshot
+  );
 
   let transaction = await contract.registerValidator(
+    pubkey,
+    operatorIds,
+    sharesData,
+    amount,
+    clusterSnapshot,
     {
-      pubkey,
-      operatorIds,
-      sharesData,
-      amount: 10,
-      clusterSnapshot,
-    },
-    {
-      value: ethers.utils.parseEther("10"),
+      gasLimit: gasLimit,
     }
   );
   let res = await transaction.wait();
