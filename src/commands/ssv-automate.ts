@@ -58,7 +58,7 @@ automate
     updateSpinnerText(`Obtaining Nonce for user ${owner}\n`);
 
     // 1. get user's nonce
-    let nonce = 1; // await getOwnerNonce(owner);
+    let nonce = 2; // await getOwnerNonce(owner);
 
     spinnerSuccess();
 
@@ -407,7 +407,7 @@ async function registerValidatorKeys(
     amount,
     clusterSnapshot,
     {
-      gasLimit: gasLimit,
+      gasLimit: 3000000, // gas estimation does not work
     }
   );
   let res = await transaction.wait();
