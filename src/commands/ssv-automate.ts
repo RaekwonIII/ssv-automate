@@ -58,7 +58,7 @@ automate
     updateSpinnerText(`Obtaining Nonce for user ${owner}\n`);
 
     // 1. get user's nonce
-    let nonce = 2; // await getOwnerNonce(owner);
+    let nonce = 3; // await getOwnerNonce(owner);
 
     spinnerSuccess();
 
@@ -82,33 +82,58 @@ automate
         continue;
       }
 
-      // run DKG ceremony with 3 default operators, and one of the provided operator IDs
-      let latestValidator = await runDKG(owner, nonce, [
+      // run DKG ceremony with 3 default operators, and one of the provided operator IDs\
+      let latestValidator;
+      try{
+        latestValidator = await runDKG(owner, nonce, [
         ...defaultDKGOperatorsInfo,
         dkgOperatorInfo,
       ]);
+      } catch (error) {
+        console.error(error)
+        spinnerError();
+        stopSpinner();
+        continue;
+      }
 
       if (!latestValidator) {
         spinnerError();
         stopSpinner();
         continue;
       }
+
       spinnerSuccess();
       updateSpinnerText(`Depositing 32 ETH to activate new validatory key\n`);
+      
       // 3. deposit
-      await depositValidatorKeys(latestValidator.deposit);
+      try{
+        await depositValidatorKeys(latestValidator.deposit);
+      } catch (error) {
+        console.error(error)
+        spinnerError();
+        stopSpinner();
+        continue;
+      }
 
+      spinnerSuccess();
       updateSpinnerText(`Registering Validator on SSV network\n`);
 
       // 4. register
-      await registerValidatorKeys(latestValidator.keyshare, owner, operatorId);
+      try{
+        await registerValidatorKeys(latestValidator.keyshare, owner, operatorId);
+      } catch (error) {
+        console.error(error)
+        spinnerError();
+        stopSpinner();
+        continue;
+      }
 
       spinnerSuccess();
       // increment nonce
       nonce += 1;
     }
 
-    updateSpinnerText("Done");
+    updateSpinnerText(`Done. Next user nonce is ${nonce}`);
     spinnerSuccess();
 
   });
@@ -316,12 +341,12 @@ async function depositValidatorKeys(deposit_filename: string) {
     }`
   );
 
-  const gasLimit = contract.estimateGas.deposit(
-    pubkey,
-    withdrawal_credentials,
-    signature,
-    deposit_data_root
-  );
+  // const gasLimit = contract.estimateGas.deposit(
+  //   pubkey,
+  //   withdrawal_credentials,
+  //   signature,
+  //   deposit_data_root
+  // );
 
   let transaction = await contract.deposit(
     pubkey,
@@ -330,7 +355,7 @@ async function depositValidatorKeys(deposit_filename: string) {
     deposit_data_root,
     {
       value: deposit,
-      gasLimit: gasLimit,
+      gasLimit: 3000000,
     }
   );
   let res = await transaction.wait();
@@ -390,13 +415,13 @@ async function registerValidatorKeys(
       balance: 0,
     };
 
-  const gasLimit = contract.estimateGas.registerValidator(
-    pubkey,
-    operatorIds,
-    sharesData,
-    amount,
-    clusterSnapshot
-  );
+  // const gasLimit = contract.estimateGas.registerValidator(
+  //   pubkey,
+  //   operatorIds,
+  //   sharesData,
+  //   amount,
+  //   clusterSnapshot
+  // );
 
   // This needs approval for spending SSV token
   // https://holesky.etherscan.io/address/0xad45A78180961079BFaeEe349704F411dfF947C6#writeContract
