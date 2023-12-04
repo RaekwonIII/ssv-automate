@@ -58,7 +58,7 @@ automate
     updateSpinnerText(`Obtaining Nonce for user ${owner}\n`);
 
     // 1. get user's nonce
-    let nonce = 3; // await getOwnerNonce(owner);
+    let nonce = 22; // await getOwnerNonce(owner);
 
     spinnerSuccess();
 
@@ -131,6 +131,8 @@ automate
       spinnerSuccess();
       // increment nonce
       nonce += 1;
+      updateSpinnerText(`Done. Next user nonce is ${nonce}`);
+      spinnerSuccess();
     }
 
     updateSpinnerText(`Done. Next user nonce is ${nonce}`);
@@ -297,7 +299,7 @@ async function runDKG(
   )[]
 ) {
   let [OP1, OP2, OP3, OP4] = dkgOperatorsInfo;
-  let cmd = `docker run -v $(pwd)/${process.env.OUTPUT_FOLDER}:/data "ssv-dkg:latest" /app init --owner ${owner} --nonce ${nonce} --withdrawAddress ${owner} --operatorIDs ${OP1?.id},${OP2?.id},${OP3?.id},${OP4?.id} --operatorsInfo '[{"id":${OP1?.id},"public_key":"${OP1?.public_key}","ip":"${OP1?.dkg_address}"},{"id":${OP2?.id},"public_key":"${OP2?.public_key}","ip":"${OP2?.dkg_address}"},{"id":${OP3?.id},"public_key":"${OP3?.public_key}","ip":"${OP3?.dkg_address}"},{"id":${OP4?.id},"public_key":"${OP4?.public_key}","ip":"${OP4?.dkg_address}"}]' --network holesky --generateInitiatorKey --outputPath /data`;
+  let cmd = `docker run -v $(pwd)/${process.env.OUTPUT_FOLDER}:/data "bloxstaking/ssv-dkg:latest" /app init --owner ${owner} --nonce ${nonce} --withdrawAddress ${owner} --operatorIDs ${OP1?.id},${OP2?.id},${OP3?.id},${OP4?.id} --operatorsInfo '[{"id":${OP1?.id},"public_key":"${OP1?.public_key}","ip":"${OP1?.dkg_address}"},{"id":${OP2?.id},"public_key":"${OP2?.public_key}","ip":"${OP2?.dkg_address}"},{"id":${OP3?.id},"public_key":"${OP3?.public_key}","ip":"${OP3?.dkg_address}"},{"id":${OP4?.id},"public_key":"${OP4?.public_key}","ip":"${OP4?.dkg_address}"}]' --network holesky --generateInitiatorKey --outputPath /data`;
   console.debug(`Running DKG ceremony with command: \n${cmd}\n`);
   let { stdout } = await sh(cmd);
   for (let line of stdout.split("\n")) {
