@@ -25,22 +25,20 @@ export const automate = new Command("automate");
 automate
   .version("0.0.1", "-v, --vers", "output the current version")
   .argument("<owner>", "the address of the cluster owner")
-  .requiredOption(
+  .option(
     "-o, --operators <operators>",
     "comma separated list of ids of operators to test",
     commaSeparatedList
   )
   .action(async (owner, options) => {
     console.info(figlet.textSync("SSV Automate"));
-    updateSpinnerText(
+    console.log(
       "Automating validator key creation, activation and registration\n"
     );
 
-    updateSpinnerText(`Fetching default Operators Info\n`);
-
     // 0. load default operators (1, 2, 3) info
     let defaultDKGOperatorsInfo = [];
-    for (const operatorId of [1, 2, 3]) {
+    for (const operatorId of [1, 3, 4]) {
       let defaultkgOperatorInfo = await getDKGOperatorInfo(operatorId);
 
       if (!defaultkgOperatorInfo?.dkg_address) {
@@ -54,90 +52,129 @@ automate
       defaultDKGOperatorsInfo.push(defaultkgOperatorInfo);
     }
 
-    spinnerSuccess();
+    console.log(
+      `Fetched default Operators Info: ${defaultDKGOperatorsInfo
+        .map((item: { dkg_address: any }) => {
+          return `${item.dkg_address}`;
+        })
+        .join(", ")}\n`
+    );
+
+    // we could either get a list of operator IDs to create clusters with,
+    // or find Lido operators that have not been tested yet, depending on the script argument
+    let operators = options.operators.map((item: string) => parseInt(item));
+
     updateSpinnerText(`Obtaining Nonce for user ${owner}\n`);
-
     // 1. get user's nonce
-    let nonce = 22; // await getOwnerNonce(owner);
+    let nonce = 230; // await getOwnerNonce(owner);
 
-    spinnerSuccess();
+    updateSpinnerText(`User Nonce: ${nonce}`);
 
     updateSpinnerText(
       `Looping through the provided operator IDs to create new validator keys \n`
     );
 
-    for (const operatorId of options.operators) {
-      // 2. invoke dkg-tool
-
-      updateSpinnerText(
-        `Launching DKG ceremony to create new validator with operators 1, 2, 3, ${operatorId} \n`
-      );
+    let problems = new Map();
+    for (const operatorId of operators) {
+      // attempt to fetch it from the map
       let dkgOperatorInfo = await getDKGOperatorInfo(operatorId);
+
       if (!dkgOperatorInfo?.dkg_address) {
         spinnerError();
         stopSpinner();
         console.error(
           `Operator ${operatorId} does not have a DKG endpoint set`
         );
+        problems.set(
+          operatorId,
+          `Operator ${operatorId} does not have a DKG endpoint set`
+        );
         continue;
       }
-
+      // 2. invoke dkg-tool
+      updateSpinnerText(
+        `Launching DKG ceremony to create new validator with operators 1, 2, 3, ${operatorId} \n`
+      );
       // run DKG ceremony with 3 default operators, and one of the provided operator IDs\
       let latestValidator;
-      try{
+      try {
         latestValidator = await runDKG(owner, nonce, [
-        ...defaultDKGOperatorsInfo,
-        dkgOperatorInfo,
-      ]);
+          ...defaultDKGOperatorsInfo,
+          dkgOperatorInfo,
+        ]);
       } catch (error) {
-        console.error(error)
         spinnerError();
         stopSpinner();
+        console.error(`DKG Ceremony failed for Operator ${operatorId}:`)
+        problems.set(
+          operatorId,
+          `DKG Ceremony failed for Operator ${operatorId}:\n${error}`
+        );
         continue;
       }
-
       if (!latestValidator) {
         spinnerError();
         stopSpinner();
+        console.error(`DKG Ceremony for Operator ${operatorId} did not generate a new validator`)
+        problems.set(
+          operatorId,
+          `DKG Ceremony for Operator ${operatorId} did not generate a new validator`
+        );
         continue;
       }
-
       spinnerSuccess();
       updateSpinnerText(`Depositing 32 ETH to activate new validatory key\n`);
-      
       // 3. deposit
-      try{
+      try {
         await depositValidatorKeys(latestValidator.deposit);
       } catch (error) {
-        console.error(error)
+        console.error(error);
         spinnerError();
         stopSpinner();
+        console.error(`Could not activate Operator ${operatorId}`)
+        problems.set(
+          operatorId,
+          `Could not activate Operator ${operatorId}:\n${error}`
+        );
         continue;
       }
-
       spinnerSuccess();
       updateSpinnerText(`Registering Validator on SSV network\n`);
-
       // 4. register
-      try{
-        await registerValidatorKeys(latestValidator.keyshare, owner, operatorId);
+      try {
+        await registerValidatorKeys(
+          latestValidator.keyshare,
+          owner,
+          operatorId
+        );
       } catch (error) {
-        console.error(error)
         spinnerError();
         stopSpinner();
+        console.error(`Could not register Operator ${operatorId}`)
+        problems.set(
+          operatorId,
+          `Could not register Operator ${operatorId}:\n${error}`
+        );
         continue;
       }
-
       spinnerSuccess();
       // increment nonce
       nonce += 1;
-      updateSpinnerText(`Done. Next user nonce is ${nonce}`);
+      updateSpinnerText(
+        `Operator ID ${operatorId} is done. Next user nonce is ${nonce}`
+      );
       spinnerSuccess();
     }
 
-    updateSpinnerText(`Done. Next user nonce is ${nonce}`);
-    spinnerSuccess();
+    console.log(`Encountered ${problems.size} problem(s)\n`);
 
+    for (let problem of problems) {
+      console.error(`Encountered issue with Operator ${problem[0]}`);
+      console.error(problem[1]);
+    }
+
+    console.log(`Done. Next user nonce is ${nonce}`);
+    spinnerSuccess();
   });
 
 function commaSeparatedList(value: string, dummyPrevious: any) {
@@ -196,8 +233,6 @@ async function getOwnerNonceFromSubgraph(owner: string): Promise<number> {
     console.debug(`Owner nonce:\n\n${ownerObj.nonce}`);
     nonce = ownerObj.nonce;
   } catch (err) {
-    spinnerError();
-    stopSpinner();
     console.error("ERROR DURING AXIOS REQUEST", err);
   } finally {
     return nonce;
@@ -214,17 +249,12 @@ async function getDKGOperatorInfo(
 
     if (response.status !== 200) throw Error("Request did not return OK");
 
-    console.debug(
-      `Information for Operator ${operatorID} obtained: ${response.data.dkg_address}`
-    );
     return {
       id: response.data.id,
       public_key: response.data.public_key,
       dkg_address: response.data.dkg_address,
     };
   } catch (err) {
-    spinnerError();
-    stopSpinner();
     console.error("ERROR DURING AXIOS REQUEST");
   }
 }
@@ -236,12 +266,119 @@ const getDKGOperatorsRequestHeaders = (operator: number) => {
 
   const restOptions = {
     method: "GET",
-    url: `${process.env.SSV_API}${operator}`,
+    url: `${process.env.SSV_API}/operators/${operator}`,
     headers,
   };
 
   return restOptions;
 };
+
+async function getClustersOwnedBy(
+  owner: string
+): Promise<{ id: number; operators: number[] }[] | undefined> {
+  // fetch all clusters owned by provided address
+  // https://api.ssv.network/api/v4/holesky/clusters/owner/0xaA184b86B4cdb747F4A3BF6e6FCd5e27c1d92c5c?page=1&perPage=10&ordering=id%3Aasc
+  try {
+    const response = await axios({
+      method: "GET",
+      url: `${process.env.SSV_API}/clusters/owner/${owner}?page=1&perPage=100&ordering=id%3Aasc`,
+      headers: {
+        "content-type": "application/json",
+      },
+    });
+
+    if (response.status !== 200) throw Error("Request did not return OK");
+
+    // return an array of objects {cluster_id, list_of_operator_ids_in_cluster}
+    return response.data.clusters.map(
+      (cluster: { id: any; operators: number[] }) => {
+        return {
+          id: cluster.id,
+          operators: cluster.operators,
+        };
+      }
+    );
+  } catch (err) {
+    console.error("ERROR DURING AXIOS REQUEST");
+  }
+}
+
+async function getLidoperatorsInfo(): Promise<
+  | Map<number, { id: number; public_key: string; dkg_address: string }>
+  | undefined
+> {
+  try {
+    // Fetch all operators that have "Lido -" in their name
+    // https://api.ssv.network/api/v4/holesky/operators?page=1&perPage=5000&ordering=id%3Aasc&search=Lido%20-
+
+    const response = await axios({
+      method: "GET",
+      url: `${process.env.SSV_API}/operators?page=1&perPage=500&ordering=id%3Aasc&search=Lido%20-`,
+      headers: {
+        "content-type": "application/json",
+      },
+    });
+
+    if (response.status !== 200) throw Error("Request did not return OK");
+
+    // generate a map with {id: {operator info}}
+    return new Map(
+      response.data.operators.map(
+        (operator: { id: any; public_key: any; dkg_address: any }) => [
+          operator.id,
+          {
+            id: operator.id,
+            public_key: operator.public_key,
+            dkg_address: operator.dkg_address,
+          },
+        ]
+      )
+    );
+  } catch (err) {
+    console.error("ERROR DURING AXIOS REQUEST");
+  }
+}
+
+function getNewLidoOperators(
+  lidoOperators:
+    | Map<number, { id: number; public_key: string; dkg_address: string }>
+    | undefined,
+  clustersOwned: any[] | undefined
+): Map<
+  number,
+  {
+    id: number;
+    public_key: string;
+    dkg_address: string;
+  }
+> {
+  // generate empty map if there is no overlap (all Lido operators appear in a cluster of this user)
+  let newOperators = new Map();
+
+  if (lidoOperators && clustersOwned) {
+    // flatten the array of arrays of operator IDs in various clusters and remove duplicates (Set)
+    let operatorIDsInOwnedClusters: Set<number> = new Set(
+      clustersOwned
+        .map((item) => item.operators)
+        .reduce(
+          (accumulator: number[], value: number[]) => accumulator.concat(value),
+          []
+        )
+    );
+    // create a new map, by filtering lido operators: if the operator ID appears in any cluster, discard it
+    newOperators = new Map(
+      Array.from(lidoOperators).filter(([_key, value]) => {
+        if ([...operatorIDsInOwnedClusters].includes(_key)) {
+          return false;
+        }
+
+        return true;
+      })
+    );
+  }
+
+  return newOperators;
+}
 
 /**
  * Execute simple shell command (async wrapper).
@@ -252,11 +389,7 @@ async function sh(cmd: string): Promise<{ stdout: String; stderr: String }> {
   return new Promise(function (resolve, reject) {
     exec(cmd, (err, stdout, stderr) => {
       if (err) {
-        console.error(err);
-        for (let line of stderr.split("\n")) {
-          console.error(`ls: ${line}`);
-        }
-        reject(err);
+        reject(new Error(`The following command failed:\n${err.cmd}\nError log:\n${stdout}`));
       } else {
         resolve({ stdout, stderr });
       }
@@ -279,10 +412,14 @@ async function getLatestValidator() {
   let dir = `${__dirname}/../../${process.env.OUTPUT_FOLDER}`;
 
   const deposit = orderRecentFilesByName(dir, "deposit");
-  console.debug(`Deposit file: ${deposit?.[0].substring(dir.length, deposit.length)}`);
+  console.debug(
+    `Deposit file: ${deposit?.[0].substring(dir.length, deposit.length)}`
+  );
 
   const keyshares = orderRecentFilesByName(dir, "keyshare");
-  console.debug(`Keyshares file: ${keyshares?.[0].substring(dir.length, keyshares.length)}`);
+  console.debug(
+    `Keyshares file: ${keyshares?.[0].substring(dir.length, keyshares.length)}`
+  );
 
   if (deposit.length && keyshares.length)
     return { keyshare: keyshares[0], deposit: deposit[0] };
@@ -300,7 +437,7 @@ async function runDKG(
 ) {
   let [OP1, OP2, OP3, OP4] = dkgOperatorsInfo;
   let cmd = `docker run -v $(pwd)/${process.env.OUTPUT_FOLDER}:/data "bloxstaking/ssv-dkg:latest" /app init --owner ${owner} --nonce ${nonce} --withdrawAddress ${owner} --operatorIDs ${OP1?.id},${OP2?.id},${OP3?.id},${OP4?.id} --operatorsInfo '[{"id":${OP1?.id},"public_key":"${OP1?.public_key}","ip":"${OP1?.dkg_address}"},{"id":${OP2?.id},"public_key":"${OP2?.public_key}","ip":"${OP2?.dkg_address}"},{"id":${OP3?.id},"public_key":"${OP3?.public_key}","ip":"${OP3?.dkg_address}"},{"id":${OP4?.id},"public_key":"${OP4?.public_key}","ip":"${OP4?.dkg_address}"}]' --network holesky --generateInitiatorKey --outputPath /data`;
-  console.debug(`Running DKG ceremony with command: \n${cmd}\n`);
+  // console.debug(`Running DKG ceremony with command: \n${cmd}\n`);
   let { stdout } = await sh(cmd);
   for (let line of stdout.split("\n")) {
     console.info(`${line}`);
