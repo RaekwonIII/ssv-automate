@@ -66,7 +66,7 @@ automate
 
     updateSpinnerText(`Obtaining Nonce for user ${owner}\n`);
     // 1. get user's nonce
-    let nonce = 230; // await getOwnerNonce(owner);
+    let nonce = 231; // await getOwnerNonce(owner);
 
     updateSpinnerText(`User Nonce: ${nonce}`);
 
