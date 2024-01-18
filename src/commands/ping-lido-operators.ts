@@ -88,6 +88,8 @@ ping
       console.log(problem[1].message);
     }
 
+    console.log("Done.")
+
     // console.error(`Operator IDs with errors: ${[problems.keys()].join(", ")}`)
 
     spinnerSuccess();
