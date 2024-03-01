@@ -109,6 +109,13 @@ async function getDKGOperatorInfo(
 
     if (response.status !== 200) throw Error("Request did not return OK");
 
+    console.log(
+      `
+      id: ${response.data.id}
+      public_key: ${response.data.public_key}
+      dkg_address: ${response.data.dkg_address}
+      `
+    )
     return {
       id: response.data.id,
       public_key: response.data.public_key,
@@ -160,7 +167,7 @@ async function sh(cmd: string): Promise<{ stdout: String; stderr: String }> {
 async function pingDKG(
   ip: string,
 ) {
-  let cmd = `docker run --rm "bloxstaking/ssv-dkg:latest" ping --ip ${ip}`;
+  let cmd = `docker run --rm "bloxstaking/ssv-dkg:v1.1.0" ping --ip ${ip}`;
   // console.debug(`Running DKG ceremony with command: \n${cmd}\n`);
   let { stdout } = await sh(cmd);
   let splitLines = stdout.split("\n")
