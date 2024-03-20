@@ -14,13 +14,12 @@ export const ping = new Command("ping");
 
 ping
   .version("0.0.1", "-v, --vers", "output the current version")
-  .argument("<owner>", "the address of the cluster owner")
   .option(
     "-o, --operators <operators>",
     "comma separated list of ids of operators to test",
     commaSeparatedList
   )
-  .action(async (owner, options) => {
+  .action(async (options) => {
     console.info(figlet.textSync("Ping operators"));
 
     // we could either get a list of operator IDs to create clusters with,

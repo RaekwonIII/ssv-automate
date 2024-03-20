@@ -18,7 +18,6 @@ import { readdirSync, lstatSync } from "fs";
 
 import DepositContract from "../../abi/DepositContract.json";
 import SSVContract from "../../abi/SSVNetwork.json";
-// import { ClusterScanner, NonceScanner } from "ssv-scanner";
 
 export const automate = new Command("automate");
 
@@ -66,7 +65,7 @@ automate
 
     updateSpinnerText(`Obtaining Nonce for user ${owner}\n`);
     // 1. get user's nonce
-    let nonce = 231; // await getOwnerNonce(owner);
+    let nonce = await getOwnerNonceFromSubgraph(owner);
 
     updateSpinnerText(`User Nonce: ${nonce}`);
 
@@ -207,19 +206,6 @@ const getGraphQLOptions = (owner: string) => {
 
   return graphQLOptions;
 };
-
-// https://github.com/oven-sh/bun/issues/3546
-// async function getOwnerNonce(owner: string): Promise<number> {
-//   const params = {
-//     network: `${process.env.NETWORK}`,
-//     nodeUrl: `${process.env.RPC_ENDPOINT}`,
-//     ownerAddress: `${owner}`,
-//     operatorIds: [],
-//   };
-//   const nonceScanner = new NonceScanner(params);
-//   const nextNonce = await nonceScanner.run();
-//   return nextNonce;
-// }
 
 async function getOwnerNonceFromSubgraph(owner: string): Promise<number> {
   let nonce = 0;
@@ -480,13 +466,6 @@ async function depositValidatorKeys(deposit_filename: string) {
     }`
   );
 
-  // const gasLimit = contract.estimateGas.deposit(
-  //   pubkey,
-  //   withdrawal_credentials,
-  //   signature,
-  //   deposit_data_root
-  // );
-
   let transaction = await contract.deposit(
     pubkey,
     withdrawal_credentials,
@@ -500,24 +479,6 @@ async function depositValidatorKeys(deposit_filename: string) {
   let res = await transaction.wait();
   console.debug("Deposited 32 ETH, validator activated: ", res.transactionHash);
 }
-
-// https://github.com/oven-sh/bun/issues/3546
-// async function getClusterSnapshot(
-//   owner: string,
-//   operatorIds: number[]
-// ): Promise<any[]> {
-//   const params = {
-//     network: `${process.env.NETWORK}`,
-//     nodeUrl: `${process.env.RPC_ENDPOINT}`,
-//     ownerAddress: `${owner}`,
-//     operatorIds: operatorIds,
-//   };
-
-//   const clusterScanner = new ClusterScanner(params);
-//   const result = await clusterScanner.run(params.operatorIds);
-//   console.info(`Obtained cluster snapshot: ${result.cluster}`);
-//   return Object.values(result.cluster);
-// }
 
 async function registerValidatorKeys(
   keyshare_filename: string,
@@ -553,14 +514,6 @@ async function registerValidatorKeys(
       active: true,
       balance: 0,
     };
-
-  // const gasLimit = contract.estimateGas.registerValidator(
-  //   pubkey,
-  //   operatorIds,
-  //   sharesData,
-  //   amount,
-  //   clusterSnapshot
-  // );
 
   // This needs approval for spending SSV token
   // https://holesky.etherscan.io/address/0xad45A78180961079BFaeEe349704F411dfF947C6#writeContract

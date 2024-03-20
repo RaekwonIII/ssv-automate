@@ -30,11 +30,6 @@ mergeDeposit
     console.debug(`Found ${pubKeyList.length} public keys from ${txhashes.length} transactions`)
     console.debug(pubKeyList);
 
-    pubKeyList = [
-      "0x8d49227c8996e944420733627fb5b07c08d5ea98d8f61c435522717909feae190c1ce13163238debb73f1266db9faab8",
-      "0xac7e1595cfd5462699f0baf52b9cb8da5f12d611f679f9bad077413cdf54617245949c0fb19c4445ddc776aa9f8077ac",
-    ];
-
     console.log(`Searching for deposit files in folder:\n${folder}`)
     let depositFilesPathList = await glob(`${folder}/**/deposit_data.json`, {
       nodir: true,
@@ -81,7 +76,7 @@ async function getPubKeysFromTxHashes(txhashes: string[]): Promise<string[]> {
     const http = axiosRateLimit(axios.create(), { maxRPS: 1 });
     const url=
     process.env.SUBGRAPH_API ||
-    "https://api.thegraph.com/subgraphs/name/raekwoniii/ssv-mainnet"
+    "https://api.studio.thegraph.com/query/53804/ssv-holesky/v0.0.1"
 
   let pubKeyList: string[] = [];
   try {
@@ -111,12 +106,6 @@ async function getPubKeysFromTxHashes(txhashes: string[]): Promise<string[]> {
 const getGraphQLQuery = (txhashes: string[]) => {
 
   const requestBody = {
-    // query: `query validators {  validatorAddeds(
-    //     where: {transactionHash_in: ["${txhashes.join('","')}"]}
-    //   ) {
-    //     publicKey
-    //   }
-    // }`,
     query: `query validators($txhashes: [Bytes!]) {  validatorAddeds(
         where: {transactionHash_in: $txhashes}
       ) {

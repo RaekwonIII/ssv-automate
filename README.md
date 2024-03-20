@@ -1,15 +1,99 @@
 # ssv-automate
 
+
+## Dependencies installation
+
+This project was created using `bun init` in bun v1.0.11. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime. The best way to use this tool is to install Bun.
+
 To install dependencies:
 
 ```bash
 bun install
 ```
 
-To run:
+## Usage
+
+To run the tool using the Bun runtime, launch the command:
 
 ```bash
-bun run index.ts
+bun index.ts --help
 ```
 
-This project was created using `bun init` in bun v1.0.11. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
+### Available sub-commands
+
+ #### `automate`
+
+ This sub-command automates validator creation through DKG, their registration, and deposit, given an owner address, as well as a list of operators that need to be included.
+ This tool's purpose is to test DKG uptime, and operator performance, by forming clusters where 3 out of 4 operators in it are fixed, and they will always be operators 1, 2, 3 from BloxStaking.
+
+ Usage example:
+
+ ```sh
+ bun index.ts automate 0xaa184b86b4cdb747f4a3bf6e6fcd5e27c1d92c5c -o 4,5
+ ```
+
+ This will form two clusters, one with operators `1,2,3,4` and one with operators `1,2,3,5`, both of them belonging to the same owner: `0xaa184b86b4cdb747f4a3bf6e6fcd5e27c1d92c5c`
+
+ #### `ping`
+
+ This sub-command tests the liveliness of DKG server of operators in the provided list.
+
+ Usage example:
+
+ ```sh
+ bun index.ts ping  -o 1,2,3,4,202
+ ```
+This will perform the `ping` command of the DKG tool on operators `1,2,3,4,202` log each result, and report a final summary with a list of operator IDs with DKG issues (either offline, or don't have a DKG endpoint set in their metadata, or are running an older version of the tool)
+
+#### `merge-deposit`
+
+This sub-command is a utility for operators to merge multiple deposit files created in a single DKG ceremony. **Its usage is specific to Simple DVT.**
+
+Typically, the user initiating a "bulk" DKG ceremony, will receive as output a single `keyshares.json` file and a single `deposit_file.json` with all the validators keyshares and public keys created during the ceremony. On the other hand, operators will have multiple files, one for each validator created.
+
+If an operator part of a Simple DVT cluster wants to verify that what has been registered on SSV, is exactly what is about to be submitted to the Lido registry, they can compare the transaction data generated from the deposit file.
+They can use this tool, providing one, or multiple transaction hashes of `registerValidator` or `bulkRegisterValidator` and merge multiple `deposit_file.json` for a single validator, in a "bulk" `deposit_file.json` containing all the public keys that are being submitted to the Lido Registry.
+
+Usage example:
+
+```sh
+bun index.ts merge-deposit /home/user/ssv-dkg/output -t 0x7773dbc84326a95375660fa3103ada78bb919333ab4faa1f047f4244496502fc,0x731569e00c3907971e2a25989af5985b3300ffbec4c033c91521de7cb3d25cb5
+```
+
+### Single-file executable
+
+It is also possible to leverage Bun's ability to bundle a project into a single file, and also compile it into a binary. To do so, launch the command:
+
+```sh
+bun build --compile index.ts --outfile=ssv-automate
+```
+
+A binary file named `ssv-automate` (you can change the name to your liking in the command above) will be generated in the current directory.
+
+You can then run all the command shown in the previous section, by substituting `bun index.ts` with `./ssv-automate`. For example:
+
+```sh
+./ssv-automate ping  -o 1,2,3,4,202
+```
+
+### Environment variables
+
+The various commands need the following environment variables to be set:
+
+```sh
+# private key of an Ethereum wallet. Necessary for the `automate` command, and it **must** the the wallet of the `owner`
+PRIVATE_KEY=
+# e.g. "https://api.studio.thegraph.com/query/53804/ssv-holesky/v0.0.1"
+SUBGRAPH_API=
+# e.g. "output_data"
+OUTPUT_FOLDER=
+NETWORK=
+# e.g. https://api.ssv.network/api/v4/$NETWORK
+SSV_API=
+
+# see https://docs.ssv.network/developers/smart-contracts
+SSV_CONTRACT=
+# see https://docs.ssv.network/developers/smart-contracts#ethereum-deposit-contract-addresses
+DEPOSIT_CONTRACT=
+RPC_ENDPOINT=
+```
