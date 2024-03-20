@@ -4,6 +4,7 @@ import { Command } from 'commander';
 import { spinnerError, stopSpinner } from "./src/spinner";
 import { automate } from "./src/commands/ssv-automate";
 import { getLidoOperators } from "./src/commands/get-lido-operators";
+import { mergeDeposit } from "./src/commands/merge-deposit"
 import { getNewOperators } from "./src/commands/get-new-operators";
 import { ping } from "./src/commands/ping-lido-operators"
 
@@ -11,6 +12,7 @@ const program = new Command();
 program.argument("<owner>", "the id of the widget")
 .description('A simple demonstrative command line tool to obtain SSV cluster data through a Subgraph API')
 .version('0.0.1')
+.addCommand(mergeDeposit)
 .addCommand(getLidoOperators)
 .addCommand(getNewOperators)
 .addCommand(ping)
