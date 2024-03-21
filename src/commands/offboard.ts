@@ -1,9 +1,5 @@
 import { Command } from "commander";
-import {
-  spinnerError,
-  spinnerSuccess,
-  stopSpinner,
-} from "../spinner";
+import { spinnerError, spinnerSuccess, stopSpinner } from "../spinner";
 import figlet from "figlet";
 import axios from "axios";
 import { ethers } from "ethers";
@@ -37,22 +33,26 @@ type ClusterObj = {
 offboard
   .version("0.0.1", "-v, --vers", "output the current version")
   .argument("<owner>", "the address of the cluster owner")
-  .argument("<action>", "the action to perform on the cluster (exit|remove|liquidate)")
+  .argument(
+    "<action>",
+    "the action to perform on the cluster (exit|remove|liquidate)"
+  )
 
   .action(async (owner, action) => {
     console.info(figlet.textSync("SSV Automate Offboarding"));
     console.log("Automating cluster offboarding\n");
-    console.log(`Performing ${action} action`)
+    console.log(`Performing ${action} action`);
 
     // 1. get user's nonce
     let clustersOwned = await getClustersDataFromSubgraph(owner);
     let problems = new Map();
     for (let cluster of clustersOwned) {
-      
-      console.log(`Processing cluster ${cluster.id}`)
+      console.log(`Processing cluster ${cluster.id}`);
 
       if (cluster.validatorCount > 1) {
-        console.error(`Cluster ${cluster.id} has ${cluster.validatorCount} validators, they can't be exited one by one`)
+        console.error(
+          `Cluster ${cluster.id} has ${cluster.validatorCount} validators, they can't be exited one by one`
+        );
         problems.set(
           cluster.id,
           `Cluster ${cluster.id} has ${cluster.validatorCount} validators, they can't be exited one by one`
@@ -60,8 +60,7 @@ offboard
         continue;
       }
 
-      if (!cluster.active && action === "liquidate") {
-        
+      if (cluster.validatorCount == 0 && cluster.active && action === "liquidate") {
         try {
           const clusterSnapshot = {
             validatorCount: cluster.validatorCount,
@@ -70,7 +69,10 @@ offboard
             active: cluster.active,
             balance: cluster.balance,
           };
-          console.log(`Liquidating cluster ${cluster.id}`)
+          console.log(
+            `Liquidating cluster ${cluster.id}`
+          );
+          console.log(`Liquidating cluster ${cluster.id}`);
           await liquidateCluster(owner, cluster.operatorIds, clusterSnapshot);
         } catch (error) {
           console.error(error);
@@ -83,27 +85,35 @@ offboard
           );
           continue;
         }
-      }
-      
-      for (let validator of cluster.validators){
-        console.log(`Processing validator ${validator.id}, cluster ${cluster.id}`)
-
-        if (action === "exit") {
+      } else if (cluster.active && action === "exit") {
+        for (let validator of cluster.validators) {
+          console.log(
+            `Processing validator ${validator.id}, cluster ${cluster.id}`
+          );
           try {
-            console.log(`Exiting validator ${validator.id} of cluster ${cluster.id}`)
+            console.log(
+              `Exiting validator ${validator.id} of cluster ${cluster.id}`
+            );
             await exitValidator(validator.id, cluster.operatorIds);
           } catch (error) {
             console.error(error);
             spinnerError();
             stopSpinner();
-            console.error(`Error exiting validator ${validator.id} of cluster ${cluster.id}`);
+            console.error(
+              `Error exiting validator ${validator.id} of cluster ${cluster.id}`
+            );
             problems.set(
               validator.id,
               `Error exiting validator ${validator.id} of cluster ${cluster.id}:\n${error}`
             );
             continue;
           }
-        } else if (action === "remove") {
+        }
+      } else if (cluster.active && action === "remove") {
+        for (let validator of cluster.validators) {
+          console.log(
+            `Processing validator ${validator.id}, cluster ${cluster.id}`
+          );
           try {
             const clusterSnapshot = {
               validatorCount: cluster.validatorCount,
@@ -112,13 +122,21 @@ offboard
               active: cluster.active,
               balance: cluster.balance,
             };
-            console.log(`Removing validator ${validator.id} of cluster ${cluster.id}`)
-            await removeValidator(validator.id, cluster.operatorIds, clusterSnapshot);
+            console.log(
+              `Removing validator ${validator.id} of cluster ${cluster.id}`
+            );
+            await removeValidator(
+              validator.id,
+              cluster.operatorIds,
+              clusterSnapshot
+            );
           } catch (error) {
             console.error(error);
             spinnerError();
             stopSpinner();
-            console.error(`Error removing validator ${validator.id} of cluster ${cluster.id}`);
+            console.error(
+              `Error removing validator ${validator.id} of cluster ${cluster.id}`
+            );
             problems.set(
               validator.id,
               `Error removing validator ${validator.id} of cluster ${cluster.id}:\n${error}`
@@ -148,7 +166,7 @@ const getGraphQLOptions = (owner: string) => {
     query: `
         query accountClusters($owner: String!) {
             account(id: $owner) {
-              clusters {
+              clusters(first: 300) {
                 id
                 validatorCount
                 networkFeeIndex
@@ -178,14 +196,16 @@ const getGraphQLOptions = (owner: string) => {
   return graphQLOptions;
 };
 
-async function getClustersDataFromSubgraph(owner: string): Promise<ClusterObj[]> {
+async function getClustersDataFromSubgraph(
+  owner: string
+): Promise<ClusterObj[]> {
   let clustersObjList = [];
   try {
     const response = await axios(getGraphQLOptions(owner));
     if (response.status !== 200) throw Error("Request did not return OK");
     if (!response.data.data.account) throw Error("Response is empty");
 
-     clustersObjList = response.data.data.account.clusters;
+    clustersObjList = response.data.data.account.clusters;
 
     console.debug(`Found ${clustersObjList.length} clusters`);
   } catch (err) {
@@ -195,7 +215,7 @@ async function getClustersDataFromSubgraph(owner: string): Promise<ClusterObj[]>
   }
 }
 
-async function exitValidator(pubkey:string, operatorIds: string[]) {
+async function exitValidator(pubkey: string, operatorIds: string[]) {
   const provider = new ethers.providers.JsonRpcProvider(
     `${process.env.RPC_ENDPOINT}`
   );
@@ -208,16 +228,19 @@ async function exitValidator(pubkey:string, operatorIds: string[]) {
     signer
   );
 
-  let operatorNumeralIds = operatorIds.map((idString) => Number.parseInt(idString))
-  let transaction = await contract.exitValidator(
-    pubkey,
-    operatorNumeralIds,
+  let operatorNumeralIds = operatorIds.map((idString) =>
+    Number.parseInt(idString)
   );
+  let transaction = await contract.exitValidator(pubkey, operatorNumeralIds);
   let res = await transaction.wait();
   console.debug(`Exited validator ${pubkey}: `, res.transactionHash);
 }
 
-async function removeValidator(pubkey:string, operatorIds: string[], clusterSnapshot: ClusterSnapshot) {
+async function removeValidator(
+  pubkey: string,
+  operatorIds: string[],
+  clusterSnapshot: ClusterSnapshot
+) {
   const provider = new ethers.providers.JsonRpcProvider(
     `${process.env.RPC_ENDPOINT}`
   );
@@ -230,8 +253,10 @@ async function removeValidator(pubkey:string, operatorIds: string[], clusterSnap
     signer
   );
 
-  let operatorNumeralIds = operatorIds.map((idString) => Number.parseInt(idString))
-    
+  let operatorNumeralIds = operatorIds.map((idString) =>
+    Number.parseInt(idString)
+  );
+
   let transaction = await contract.removeValidator(
     pubkey,
     operatorNumeralIds,
@@ -244,7 +269,11 @@ async function removeValidator(pubkey:string, operatorIds: string[], clusterSnap
   console.debug(`Removed validator ${pubkey}: `, res.transactionHash);
 }
 
-async function liquidateCluster(owner:string, operatorIds: string[], clusterSnapshot: ClusterSnapshot) {
+async function liquidateCluster(
+  owner: string,
+  operatorIds: string[],
+  clusterSnapshot: ClusterSnapshot
+) {
   const provider = new ethers.providers.JsonRpcProvider(
     `${process.env.RPC_ENDPOINT}`
   );
@@ -257,8 +286,10 @@ async function liquidateCluster(owner:string, operatorIds: string[], clusterSnap
     signer
   );
 
-  let operatorNumeralIds = operatorIds.map((idString) => Number.parseInt(idString))
-    
+  let operatorNumeralIds = operatorIds.map((idString) =>
+    Number.parseInt(idString)
+  );
+
   let transaction = await contract.liquidate(
     owner,
     operatorNumeralIds,
@@ -268,5 +299,8 @@ async function liquidateCluster(owner:string, operatorIds: string[], clusterSnap
     }
   );
   let res = await transaction.wait();
-  console.debug(`Liquidated cluster ${owner}-${operatorIds.join("-")}: `, res.transactionHash);
+  console.debug(
+    `Liquidated cluster ${owner}-${operatorIds.join("-")}: `,
+    res.transactionHash
+  );
 }
