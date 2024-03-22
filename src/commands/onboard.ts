@@ -19,9 +19,9 @@ import { readdirSync, lstatSync } from "fs";
 import DepositContract from "../../abi/DepositContract.json";
 import SSVContract from "../../abi/SSVNetwork.json";
 
-export const automate = new Command("automate");
+export const onboard = new Command("onboard");
 
-automate
+onboard
   .version("0.0.1", "-v, --vers", "output the current version")
   .argument("<owner>", "the address of the cluster owner")
   .option(

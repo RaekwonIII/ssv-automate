@@ -21,7 +21,7 @@ bun index.ts --help
 
 ### Available sub-commands
 
- #### `automate`
+ #### `onboard`
 
  This sub-command automates validator creation through DKG, their registration, and deposit, given an owner address, as well as a list of operators that need to be included.
  This tool's purpose is to test DKG uptime, and operator performance, by forming clusters where 3 out of 4 operators in it are fixed, and they will always be operators 1, 2, 3 from BloxStaking.
@@ -29,7 +29,7 @@ bun index.ts --help
  Usage example:
 
  ```sh
- bun index.ts automate 0xaa184b86b4cdb747f4a3bf6e6fcd5e27c1d92c5c -o 4,5
+ bun index.ts onboard 0xaa184b86b4cdb747f4a3bf6e6fcd5e27c1d92c5c -o 4,5
  ```
 
  This will form two clusters, one with operators `1,2,3,4` and one with operators `1,2,3,5`, both of them belonging to the same owner: `0xaa184b86b4cdb747f4a3bf6e6fcd5e27c1d92c5c`
@@ -59,6 +59,22 @@ Usage example:
 ```sh
 bun index.ts merge-deposit /home/user/ssv-dkg/output -t 0x7773dbc84326a95375660fa3103ada78bb919333ab4faa1f047f4244496502fc,0x731569e00c3907971e2a25989af5985b3300ffbec4c033c91521de7cb3d25cb5
 ```
+
+#### `offboard`
+
+ This sub-command automates validator exit from beacon chain through protocol exit messaging, validator removal from SSV network, as well as cluster liquidation.
+
+ This tool's purpose is to clean up an account used for testing, and, given an owner address, it will find **all clusters** from this account, and perform the specified action on **all of them**. At this moment, no filtering is performed on the clusters, except ensuring the correct conditions are met for the given actions (removing validators from `active` clusters, or avoid liquidating `inactive` clusters, because they are already liquidated).
+
+ Usage example:
+
+ ```sh
+ bun index.ts offboard 0xaa184b86b4cdb747f4a3bf6e6fcd5e27c1d92c5c exit
+ ```
+
+ This will exit validators present in all clusters owned by the specified address.
+
+ > ⚠️ Please note: for now, bulk exits, and bulk removals have not been implemented, so clusters with multiple validators will be ignored, and a warning message will be shown.
 
 ### Single-file executable
 
