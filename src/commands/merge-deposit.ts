@@ -28,7 +28,7 @@ mergeDeposit
     getGraphQLQuery(txhashes.txhashes);
     let pubKeyList = await getPubKeysFromTxHashes(txhashes.txhashes);
     console.debug(
-      `Found ${pubKeyList.length} public keys from ${txhashes.length} transactions`
+      `Found ${pubKeyList.length} public keys from ${txhashes.length || 1} transactions`
     );
     console.debug(pubKeyList);
 
