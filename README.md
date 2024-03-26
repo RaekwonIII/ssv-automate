@@ -3,7 +3,11 @@
 
 ## Dependencies installation
 
-This project was created using `bun init` in bun v1.0.11. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime. The best way to use this tool is to install Bun.
+> This project was created using `bun init` in bun v1.0.11.
+> Newer versions of bun, might suffer from [this known issue](https://github.com/oven-sh/bun/issues/267)
+> In this case, it is advised to downgrade bun to this specific version `curl -fsSl https://bun.sh/install | bash -s "bun-v1.0.11"` or wait for an incoming fix.
+
+[Bun](https://bun.sh) is a fast all-in-one JavaScript runtime. The best way to use this tool is to install Bun.
 
 To install dependencies:
 
@@ -57,7 +61,7 @@ They can use this tool, providing one, or multiple transaction hashes of `regist
 Usage example:
 
 ```sh
-bun index.ts merge-deposit /home/user/ssv-dkg/output -t 0x7773dbc84326a95375660fa3103ada78bb919333ab4faa1f047f4244496502fc,0x731569e00c3907971e2a25989af5985b3300ffbec4c033c91521de7cb3d25cb5
+bun index.ts merge-deposit <DKG_OPERATOR_OUTPUT_FOLDER> -t <TX_HASH> -o <OUTPUT_FOLDER>
 ```
 
 #### `offboard`
