@@ -22,13 +22,17 @@ mergeDeposit
     "a comma-separated list of transaction hashes from which to extract validator public keys",
     commaSeparatedList
   )
-  .action(async (folder, txhashes) => {
+  .option(
+    "-o, --output <output>",
+    "a comma-separated list of transaction hashes from which to extract validator public keys",
+  )
+  .action(async (folder, options) => {
     console.info(figlet.textSync("Simple DVT Merge Deposit files"));
 
-    getGraphQLQuery(txhashes.txhashes);
-    let pubKeyList = await getPubKeysFromTxHashes(txhashes.txhashes);
+    getGraphQLQuery(options.txhashes);
+    let pubKeyList = await getPubKeysFromTxHashes(options.txhashes);
     console.debug(
-      `Found ${pubKeyList.length} public keys from ${txhashes.length || 1} transactions`
+      `Found ${pubKeyList.length} public keys from ${options.txhashes.length || 1} transactions`
     );
     console.debug(pubKeyList);
 
@@ -94,7 +98,7 @@ mergeDeposit
     var hours = date.getHours();
     var minutes = date.getMinutes();
     var seconds = date.getSeconds();
-    const filename = `./deposit_data-${date.getFullYear()}-${
+    const filename = `${options.output}/deposit_data-${date.getFullYear()}-${
       (month < 10 ? "0" : "") + month
     }-${(day < 10 ? "0" : "") + day}T${(hours < 10 ? "0" : "") + hours}:${
       (minutes < 10 ? "0" : "") + minutes
