@@ -100,9 +100,9 @@ mergeDeposit
     var seconds = date.getSeconds();
     const filename = `${options.output}/deposit_data-${date.getFullYear()}-${
       (month < 10 ? "0" : "") + month
-    }-${(day < 10 ? "0" : "") + day}T${(hours < 10 ? "0" : "") + hours}:${
+    }-${(day < 10 ? "0" : "") + day}T${(hours < 10 ? "0" : "") + hours}-${
       (minutes < 10 ? "0" : "") + minutes
-    }:${(seconds < 10 ? "0" : "") + seconds}Z.json`;
+    }-${(seconds < 10 ? "0" : "") + seconds}Z.json`;
 
     console.debug(`Writing deposit file data to file: ${filename}`);
     // console.log(depositFilesObjectsLits)
