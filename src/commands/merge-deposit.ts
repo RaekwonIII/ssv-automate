@@ -24,10 +24,15 @@ mergeDeposit
   )
   .option(
     "-o, --output <output>",
-    "a comma-separated list of transaction hashes from which to extract validator public keys"
+    "path of the folder where the merged deposit file(s) will be generated"
   )
   .action(async (folder, options) => {
     console.info(figlet.textSync("Simple DVT Merge Deposit files"));
+    if (!folder) throw Error("No DKG operator output folder provided");
+    if (!options.txhashes)
+      throw Error("No registration transaction hashes provided");
+    if (!options.output)
+      throw Error("No merged deposit file output folder provided");
 
     let pubKeyList = await getPubKeysFromTxHashes(options.txhashes);
     console.debug(
@@ -196,11 +201,23 @@ async function getPubKeysFromTxHashes(txhashes: string[]): Promise<string[]> {
 
   let pubKeyList: string[] = [];
   try {
-    const response = await http.post(url, getGraphQLQuery(txhashes), {
-      headers: {
-        "content-type": "application/json",
+    const response = await http.post(
+      url,
+      {
+        query: `query validators($txhashes: [Bytes!]) {  validatorAddeds(
+        where: {transactionHash_in: $txhashes}
+      ) {
+        publicKey
+      }
+    }`,
+        variables: { txhashes: txhashes },
       },
-    });
+      {
+        headers: {
+          "content-type": "application/json",
+        },
+      }
+    );
     if (response.status !== 200) throw Error("Request did not return OK");
     if (!response.data.data.validatorAddeds) throw Error("Response is empty");
     let pubkeyObjList = response.data.data.validatorAddeds;
@@ -215,17 +232,3 @@ async function getPubKeysFromTxHashes(txhashes: string[]): Promise<string[]> {
     return pubKeyList;
   }
 }
-
-const getGraphQLQuery = (txhashes: string[]) => {
-  const requestBody = {
-    query: `query validators($txhashes: [Bytes!]) {  validatorAddeds(
-        where: {transactionHash_in: $txhashes}
-      ) {
-        publicKey
-      }
-    }`,
-    variables: { txhashes: txhashes },
-  };
-
-  return requestBody;
-};
