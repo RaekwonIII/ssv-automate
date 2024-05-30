@@ -38,13 +38,13 @@ USER bun
 
 ENV NODE_ENV=production
 
-ENV SUBGRAPH_API="https://api.studio.thegraph.com/query/53804/ssv-holesky/version/latest"
+ENV SUBGRAPH_API="https://api.studio.thegraph.com/query/71118/ssv-network-ethereum/version/latest"
 ENV OUTPUT_FOLDER="output_data"
-ENV NETWORK=holesky
+ENV NETWORK=mainnet
 ENV SSV_API=https://api.ssv.network/api/v4/$NETWORK
 
 # e2m
-ENV E2M_API=https://e2m-holesky.ssv.network/api/stats
+ENV E2M_API=https://e2m.ssv.network//api/stats
 ENV E2M_CLUSTER_API=$E2M_API/validators?latest=10&minus=1&clusters=
 
 # Rated
@@ -52,7 +52,7 @@ ENV RATED_API="https://api.rated.network/v0/eth"
 ENV RATED_API_PARAMS="/validators/effectiveness?size=10&granularity=year&groupBy=timeWindow&indices="
 
 # holesky
-ENV DEPOSIT_CONTRACT="0x4242424242424242424242424242424242424242"
-ENV SSV_CONTRACT="0x38A4794cCEd47d3baf7370CcC43B560D3a1beEFA"
+ENV DEPOSIT_CONTRACT="0x00000000219ab540356cBB839Cbe05303d7705Fa"
+ENV SSV_CONTRACT="0xDD9BC35aE942eF0cFa76930954a156B3fF30a4E1"
 
 ENTRYPOINT ["bun", "index.js"]
