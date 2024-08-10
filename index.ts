@@ -6,11 +6,13 @@ import { onboard } from "./src/commands/onboard";
 import { ping } from "./src/commands/ping-lido-operators"
 import { mergeDeposit } from "./src/commands/merge-deposit"
 import { offboard } from "./src/commands/offboard"
+import { check } from "./src/commands/check"
 
 const program = new Command();
 program
 .description('A simple demonstrative command line tool to automate tasks such as testing Simple DVT operator onboarding, pinging their DKG node, and merging deposit files')
 .version('0.0.1')
+.addCommand(check)
 .addCommand(offboard)
 .addCommand(mergeDeposit)
 .addCommand(ping)
