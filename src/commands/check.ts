@@ -12,9 +12,10 @@ import axios from "axios";
 export const check = new Command("check");
 
 type OperatorPrivateInfo = {
-  operatorId: number;
-  whitelisted: string;
+  id: number;
   fee: number;
+  isPrivate: boolean;
+  whitelisted: string[];
 };
 
 check
@@ -32,8 +33,8 @@ check
     let operatorsList = options.operators.sort();
 
     console.log(operatorsList);
-    let operators: Set<number> = new Set([
-      ...operatorsList.map((item: string) => parseInt(item)),
+    let operators: Set<string> = new Set([
+      ...operatorsList.map((item: string) => item),
     ]);
     let operatorsPrivateInfoArray = await getOperatorsPrivateInfo(
       Array.from(operators)
@@ -45,23 +46,23 @@ check
 
     let problems = new Map();
     for (const operatorPrivateInfo of operatorsPrivateInfoArray) {
-      if (!operatorPrivateInfo.whitelisted) {
+      if (operatorPrivateInfo.whitelisted.length == 0) {
         console.error(
-          `Operator ${operatorPrivateInfo.operatorId} did not whitelist any address`
+          `Operator ${operatorPrivateInfo.id} did not whitelist any address`
         );
         problems.set(
-          operatorPrivateInfo.operatorId,
-          `Operator ${operatorPrivateInfo.operatorId} did not whitelist any address`
+          operatorPrivateInfo.id,
+          `Operator ${operatorPrivateInfo.id} did not whitelist any address`
         );
       }
 
       if (operatorPrivateInfo.fee > 0) {
         console.error(
-          `Operator ${operatorPrivateInfo.operatorId} has a non-zero fee: ${operatorPrivateInfo.fee}`
+          `Operator ${operatorPrivateInfo.id} has a non-zero fee: ${operatorPrivateInfo.fee}`
         );
         problems.set(
-          operatorPrivateInfo.operatorId,
-          `Operator ${operatorPrivateInfo.operatorId} has a non-zero fee: ${operatorPrivateInfo.fee}`
+          operatorPrivateInfo.id,
+          `Operator ${operatorPrivateInfo.id} has a non-zero fee: ${operatorPrivateInfo.fee}`
         );
       }
       stopSpinner();
@@ -91,7 +92,7 @@ function commaSeparatedList(value: string, dummyPrevious: any) {
 }
 
 async function getOperatorsPrivateInfo(
-  operatorIDs: number[]
+  operatorIDs: string[]
 ): Promise<OperatorPrivateInfo[]> {
   let operatorPrivateInfoArray: OperatorPrivateInfo[] = [];
   try {
@@ -105,46 +106,24 @@ async function getOperatorsPrivateInfo(
       },
       data: {
         query: `
-            query operatorsWhitelistUpdates($operatorIDs: [Int]!) {
-              operatorWhitelistUpdateds(
-                where: {operatorId_in:  $operatorIDs}
-              ) {
-                operatorId
-                whitelisted
-              }
-              operatorFeeExecuteds(
-                where: {operatorId_in:  $operatorIDs}
-              ) {
-                fee
-                operatorId
-              }
-            }`,
+        query MyQuery($operatorIDs: [String!] = "") {
+          operators(where: {id_in: $operatorIDs}) {
+            id
+            fee
+            isPrivate
+            whitelisted {
+              id
+            }
+          }
+        }`,
         variables: { operatorIDs: operatorIDs },
       },
     });
 
     if (response.status !== 200) throw Error("Request did not return OK");
-    if (!response.data.data.operatorWhitelistUpdateds && response.data.data.operatorFeeExecuteds) throw Error("Response is empty");
-
-    // We have two separate lists of dishomogeneus results. The only link between them is the operator ID.
-    // Generate map with the first list of results
-    let operatorPrivateInfoMap: Map<string, OperatorPrivateInfo> = new Map(response.data.data.operatorFeeExecuteds.map(
-      (x: { operatorId: string; fee: string; }) => {
-        console.log(`Operator: ${x.operatorId} has fee ${x.fee}`)
-        return [x.operatorId, {
-          operatorId: parseInt(x.operatorId),
-          whitelisted: "",
-          fee: parseInt(x.fee),
-      }]
-      }
-    ));
-    // iterate over second list and back-fill the map with the results found in it.
-    response.data.data.operatorWhitelistUpdateds.map((x: { operatorId: string; whitelisted: string; }) => {
-      let i: OperatorPrivateInfo | undefined = operatorPrivateInfoMap.get(x.operatorId)
-      if (i) i.whitelisted = x.whitelisted
-    })
-
-    operatorPrivateInfoArray = [...operatorPrivateInfoMap.values()].sort((a, b) => a.operatorId - b.operatorId);
+    if (!response.data.data.operators) throw Error("Response is empty");
+    
+    operatorPrivateInfoArray = response.data.data.operators
 
     console.debug(`Found ${operatorPrivateInfoArray.length} operators`);
   } catch (err) {
