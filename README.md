@@ -96,6 +96,14 @@ You can then run all the command shown in the previous section, by substituting 
 ./ssv-automate ping  -o 1,2,3,4,202
 ```
 
+### Docker build
+
+To build a docker image on a Mac M* chip, use this command:
+
+```sh
+docker buildx build --platform linux/amd64,linux/arm64 --push -t <TAG> .
+```
+
 ### Environment variables
 
 The various commands need the following environment variables to be set:

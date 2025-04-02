@@ -4,7 +4,7 @@
 # If you need more help, visit the Dockerfile reference guide at
 # https://docs.docker.com/engine/reference/builder/
 
-FROM oven/bun:1.0.11-alpine as base
+FROM oven/bun:1.0.11-alpine AS base
 WORKDIR /home/bun/app
 
 FROM base AS install
